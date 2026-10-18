@@ -3,336 +3,277 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <!-- PWA Settings für iOS Safari -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="CryptoAnalyst">
-    <title>Crypto Institutional Research Terminal</title>
-    
-    <!-- TradingView Lightweight Charts Library CDN -->
+    <meta name="apple-mobile-web-app-title" content="QuantTerminal">
+    <title>Multi-Asset Institutional Research Dashboard</title>
+
     <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
-    
+
     <style>
         :root {
-            --bg-color: #0b0e14;
-            --card-bg: #151a23;
-            --border-color: #262d3d;
-            --text-main: #e1e7ec;
-            --text-muted: #848e9c;
-            --green: #0ecb81;
-            --red: #f6465d;
-            --accent: #2962ff;
+            --bg-global: #e2ecf4;
+            --card-bg: #ffffff;
+            --text-dark: #1a252f;
+            --text-muted: #5a6a7b;
+            --border-color: #cbd8e5;
+            --ema-50: #2ca02c;
+            --ema-200: #f1c40f;
+            --accent-steel: #1f77b4;
+            --badge-green: #0ecb81;
+            --badge-red: #f6465d;
+            --badge-yellow: #e6a23c;
+            --banner-bg: #1a252f;
         }
 
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-        body { background-color: var(--bg-color); color: var(--text-main); padding: 12px; padding-bottom: 40px; }
-        
-        /* Header & Selector */
-        header { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border-color); margin-bottom: 15px; }
-        h1 { font-size: 1.1rem; font-weight: 700; color: #fff; }
-        select { background: var(--card-bg); color: var(--text-main); border: 1px solid var(--border-color); padding: 8px 12px; border-radius: 8px; font-weight: 600; font-size: 0.9rem; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif; }
+        body { background-color: var(--bg-global); color: var(--text-dark); padding: 12px; padding-bottom: 70px; }
 
-        /* Grid System */
-        .grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
-        @media(min-width: 768px) { .grid { grid-template-columns: repeat(2, 1fr); } .full-width { grid-column: span 2; } }
+        header { display: flex; justify-content: space-between; align-items: center; padding: 10px 4px; margin-bottom: 12px; }
+        h1 { font-size: 1.1rem; font-weight: 800; color: var(--text-dark); letter-spacing: -0.5px; }
+        .sub-tag { font-size: 0.75rem; background: var(--accent-steel); color: #fff; padding: 3px 8px; border-radius: 6px; font-weight: 600; }
 
-        /* Cards */
-        .card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 14px; }
-        .card-title { font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; font-weight: 600; display: flex; justify-content: space-between; }
+        /* 3x3 Grid Layout */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 12px;
+        }
 
-        /* Metric Dashboard */
-        .price-display { font-size: 1.8rem; font-weight: 700; }
-        .price-change { font-size: 0.9rem; margin-left: 8px; font-weight: 600; }
-        
-        /* Visual Progress / Sentiment Gauge */
-        .progress-bar-bg { background: var(--border-color); height: 10px; border-radius: 5px; overflow: hidden; margin-top: 8px; position: relative; }
-        .progress-bar-fill { height: 100%; border-radius: 5px; transition: width 0.5s ease; }
-        
-        /* Chart Containers */
-        #main-chart { width: 100%; height: 350px; }
-        #rsi-chart { width: 100%; height: 120px; margin-top: 5px; }
+        @media(min-width: 768px) {
+            .dashboard-grid { grid-template-columns: repeat(2, 1fr); }
+        }
 
-        /* Tables */
-        table { width: 100%; border-collapse: collapse; margin-top: 5px; font-size: 0.85rem; }
-        th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--border-color); }
-        th { color: var(--text-muted); font-weight: 500; }
-        
-        /* ASCII/Bar visual helper */
-        .inline-bar { display: inline-block; height: 8px; border-radius: 4px; background: var(--accent); }
+        @media(min-width: 1200px) {
+            .dashboard-grid { grid-template-columns: repeat(3, 1fr); }
+        }
+
+        /* Subplot Cards */
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 14px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+        }
+
+        .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+        .asset-title { font-size: 1.05rem; font-weight: 700; color: var(--text-dark); }
+        .asset-price { font-size: 1.15rem; font-weight: 800; margin-top: 2px; }
+        .ew-phase { font-size: 0.75rem; font-weight: 700; color: var(--accent-steel); background: #eef5fc; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-top: 2px; }
+
+        .chart-container { width: 100%; height: 180px; margin: 8px 0; border-radius: 6px; overflow: hidden; }
+
+        /* Report Bullet Points */
+        .report-block { font-size: 0.78rem; color: var(--text-dark); line-height: 1.45; margin-top: 8px; border-top: 1px solid #f0f4f8; padding-top: 8px; }
+        .report-block ul { list-style: none; }
+        .report-block li { margin-bottom: 3px; }
+        .report-block strong { color: var(--text-muted); }
+
+        /* Timeline X-Axis */
+        .timeline-axis { display: flex; justify-content: space-between; font-size: 0.65rem; font-weight: 700; color: var(--text-muted); background: #f4f8fc; padding: 4px 6px; border-radius: 4px; margin-top: 6px; }
+
+        /* Badges */
+        .card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
+        .badge { font-size: 0.7rem; font-weight: 800; color: #fff; padding: 4px 10px; border-radius: 4px; text-transform: uppercase; }
+        .badge-bullish { background: var(--badge-green); }
+        .badge-bearish { background: var(--badge-red); }
+        .badge-neutral { background: var(--badge-yellow); }
+        .fine-print { font-size: 0.65rem; color: var(--text-muted); }
+
+        /* Global Macro & Legend Panels */
+        .macro-card { background: #f8fafc; border: 1px dashed var(--accent-steel); }
+        .macro-title { font-size: 0.9rem; font-weight: 800; color: var(--accent-steel); margin-bottom: 8px; }
+        .macro-list { font-size: 0.8rem; line-height: 1.6; list-style: none; }
+
+        /* Bottom CRV Banner */
+        .bottom-banner {
+            position: fixed;
+            bottom: 0; left: 0; right: 0;
+            background: var(--banner-bg);
+            color: #ffffff;
+            padding: 10px 16px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            overflow-x: auto;
+            white-space: nowrap;
+            box-shadow: 0 -4px 12px rgba(0,0,0,0.15);
+            z-index: 1000;
+        }
+        .crv-item { margin-right: 14px; font-family: monospace; }
+        .crv-val { color: var(--badge-green); font-weight: 800; }
     </style>
 </head>
 <body>
 
     <header>
-        <h1>RESEARCH TERMINAL</h1>
-        <select id="asset-select" onchange="loadAssetData()">
-            <option value="BTCUSDT">Bitcoin (BTC)</option>
-            <option value="ETHUSDT">Ethereum (ETH)</option>
-            <option value="SOLUSDT">Solana (SOL)</option>
-        </select>
+        <div>
+            <h1>QUANTITATIVE RESEARCH TERMINAL</h1>
+            <div style="font-size:0.75rem; color:var(--text-muted);">Elliott Wave & Multi-Asset Dashboard</div>
+        </div>
+        <span class="sub-tag">3-YEAR TIMELINE PROJECTION</span>
     </header>
 
-    <div class="grid">
-        <!-- 1. Executive Summary & Price -->
-        <div class="card">
-            <div class="card-title">1. Executive Summary & Market Lage</div>
-            <div style="display:flex; align-items: baseline;">
-                <span id="current-price" class="price-display"> Loading...</span>
-                <span id="price-change" class="price-change"></span>
-            </div>
-            
-            <div style="margin-top: 15px;">
-                <div style="display:flex; justify-content:space-between; font-size:0.85rem;">
-                    <span>Crypto Fear & Greed Index:</span>
-                    <span id="fg-val" style="font-weight:bold;">--</span>
-                </div>
-                <div class="progress-bar-bg">
-                    <div id="fg-bar" class="progress-bar-fill" style="width: 0%; background: var(--accent);"></div>
-                </div>
-            </div>
+    <div class="dashboard-grid" id="grid-container">
+        <!-- Panels 1-7 (Asset Cards) will be generated by JS -->
+        
+        <!-- Panel 8: Global Macro Risk Monitor -->
+        <div class="card macro-card">
+            <div class="macro-title">PANEL 8: RISIKO-MONITOR (GLOBAL MACRO)</div>
+            <ul class="macro-list">
+                <li>• <b>Hindenburg-Omen:</b> <span style="color:var(--badge-green); font-weight:bold;">INAKTIV (0 Trigger)</span></li>
+                <li>• <b>Fed Policy:</b> Pivot-Phase / Erwartete Zinsschritte</li>
+                <li>• <b>Liquidity (M2):</b> Moderate Expansion (Global Risk-On)</li>
+                <li>• <b>VIX Index:</b> 14.50 (Stabil / Niedrige Volatilität)</li>
+                <li>• <b>Sektor-Rotation:</b> Tech Growth & Quality Value</li>
+            </ul>
         </div>
 
-        <!-- 2. Capital Flows / ETF -->
-        <div class="card">
-            <div class="card-title">2. Capital Flows (Spot ETF Netflows)</div>
-            <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:8px;">Estimated Institutional Weekly Flows ($M)</p>
-            <div id="etf-flows-list">
-                <!-- Dynamic ETF Bars -->
-            </div>
-        </div>
-
-        <!-- 3. Technical Chart (Full Width) -->
-        <div class="card full-width">
-            <div class="card-title">
-                <span>4. Technische Analyse (Spot Price, EMA 50/200, Levels)</span>
-                <span style="color:var(--accent)">Live Binance Data</span>
-            </div>
-            <div id="main-chart"></div>
-            <div id="rsi-chart"></div>
-        </div>
-
-        <!-- 4. On-Chain Metrics -->
-        <div class="card">
-            <div class="card-title">3. On-Chain & Valuation Metrics</div>
-            
-            <div style="margin-bottom:12px;">
-                <div style="display:flex; justify-content:space-between; font-size:0.8rem;">
-                    <span>MVRV-Z Score (Fair Value Zone)</span>
-                    <span style="font-weight:bold; color:var(--green)">0.74 (Fair)</span>
-                </div>
-                <div class="progress-bar-bg"><div style="width:25%; background:var(--green);" class="progress-bar-fill"></div></div>
-            </div>
-
-            <div>
-                <div style="display:flex; justify-content:space-between; font-size:0.8rem;">
-                    <span>NUPL (Belief / Optimism)</span>
-                    <span style="font-weight:bold; color:var(--green)">0.48 (Belief)</span>
-                </div>
-                <div class="progress-bar-bg"><div style="width:48%; background:var(--green);" class="progress-bar-fill"></div></div>
-            </div>
-        </div>
-
-        <!-- 5. Kursszenarien -->
-        <div class="card">
-            <div class="card-title">5. Kursszenarien & Targets</div>
-            <table>
-                <thead>
-                    <tr><th>Horizon</th><th>Bear</th><th>Base Target</th><th>Bull</th></tr>
-                </thead>
-                <tbody id="scenarios-body">
-                    <!-- Populated via JS -->
-                </tbody>
-            </table>
-        </div>
-
-        <!-- 6. Risikoeinschätzung -->
-        <div class="card full-width">
-            <div class="card-title">6. Risk Matrix (Katalysatoren vs. Risiken)</div>
-            <table>
-                <thead>
-                    <tr><th>Upside Katalysator</th><th>Prob.</th><th>Downside Risiko</th><th>Prob.</th></tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td>ETF Inflow Expansion</td><td style="color:var(--green)">75%</td>
-                        <td>Fed Restriktive Politik</td><td style="color:var(--red)">25%</td>
-                    </tr>
-                    <tr>
-                        <td>ATH Breakout ($126k)</td><td style="color:var(--green)">60%</td>
-                        <td>Derivate Long-Squeeze</td><td style="color:var(--red)">40%</td>
-                    </tr>
-                    <tr>
-                        <td>Globale M2 Expansion</td><td style="color:var(--green)">80%</td>
-                        <td>Kapitalabfluss in Tech/KI</td><td style="color:var(--red)">35%</td>
-                    </tr>
-                </tbody>
-            </table>
+        <!-- Panel 9: System-Legende & Guide -->
+        <div class="card macro-card">
+            <div class="macro-title">PANEL 9: SYSTEM-LEGENDE & GUIDE</div>
+            <ul class="macro-list">
+                <li>• <span style="color:var(--ema-50); font-weight:bold;">— EMA 50:</span> Kurzfristiger Trendfilter</li>
+                <li>• <span style="color:var(--ema-200); font-weight:bold;">— EMA 200:</span> Makro-Trendanker (Support/Resistance)</li>
+                <li>• <b>Geometric Path:</b> EW-Struktur & 3-Jahre-Zielprojektion</li>
+                <li>• <b>X-Achse:</b> Breakout → HEUTE → 1J → 2J → 3J Targets</li>
+                <li>• <b>Badges:</b> <span style="color:var(--badge-green)">BULLISCH</span> | <span style="color:var(--badge-yellow)">NEUTRAL</span> | <span style="color:var(--badge-red)">BEARISH</span></li>
+            </ul>
         </div>
     </div>
 
-    <script>
-        let mainChart, rsiChart, candleSeries, ema50Series, ema200Series, rsiSeries;
+    <!-- Bottom CRV Comparison Bar -->
+    <div class="bottom-banner" id="crv-banner">
+        <span>BODEN-MATRIX (CRV COMPARISON):</span>
+        <div id="crv-items-container" style="display:flex;"></div>
+    </div>
 
-        // Init App
+    <script>
+        // Assets Spezifikation
+        const assets = [
+            { id: 'btc', name: 'Bitcoin (BTC)', curr: 'USD', type: 'crypto', symbol: 'BTCUSDT', ew: 'Welle 3 Impuls', price: 85400, rsi: 62, crv: 4.8, badge: 'BULLISCH', bClass: 'badge-bullish', targets: ['78k', 'HEUTE', '115k', '140k', '180k'], report: { ew: 'Akkumulation im primären Impulsbein', fib: '0.618 Retracement bei $81.500 gehalten', trigger: '$88.000 Breakout' } },
+            { id: 'mbg', name: 'Mercedes-Benz (MBG)', curr: 'EUR', type: 'stock', symbol: 'MBG.DE', ew: 'Welle (4) Korrektur', price: 58.20, rsi: 44, crv: 2.1, badge: 'NEUTRAL', bClass: 'badge-yellow', targets: ['52€', 'HEUTE', '64€', '72€', '80€'], report: { ew: 'Seitwärts-Konsolidierung in Welle (4)', fib: '0.50 Fib Support bei 55.00€', trigger: '60.50€ Ausbruch' } },
+            { id: 'alv', name: 'Allianz (ALV)', curr: 'EUR', type: 'stock', symbol: 'ALV.DE', ew: 'Welle 5 Ausfächerung', price: 285.50, rsi: 68, crv: 2.3, badge: 'BULLISCH', bClass: 'badge-bullish', targets: ['260€', 'HEUTE', '310€', '335€', '360€'], report: { ew: 'Starke finale Impulswelle nach oben', fib: '1.618 Extension-Ziel erreicht', trigger: '290.00€ Ath-Test' } },
+            { id: 'aapl', name: 'Apple (AAPL)', curr: 'USD', type: 'stock', symbol: 'AAPL', ew: 'Welle 3 Trendfortsetzung', price: 232.10, rsi: 59, crv: 3.1, badge: 'BULLISCH', bClass: 'badge-bullish', targets: ['215$', 'HEUTE', '260$', '290$', '320$'], report: { ew: 'Intakter Aufwärtstrend über EMA 50', fib: 'Support-Cluster bei $220 gepuffert', trigger: '$238.00 Allzeit-Hoch' } },
+            { id: 'googl', name: 'Alphabet A (GOOGL)', curr: 'USD', type: 'stock', symbol: 'GOOGL', ew: 'Welle C Rebound', price: 165.40, rsi: 51, crv: 3.5, badge: 'BULLISCH', bClass: 'badge-bullish', targets: ['150$', 'HEUTE', '195$', '220$', '250$'], report: { ew: 'Bodenbildung in Welle C abgeschlossen', fib: '0.382 Fib Rebound bei $160', trigger: '$172.00 Widerstand' } },
+            { id: 'tsla', name: 'Tesla (TSLA)', curr: 'USD', type: 'stock', symbol: 'TSLA', ew: 'Welle (B) Volatilität', price: 218.80, rsi: 47, crv: 2.9, badge: 'NEUTRAL', bClass: 'badge-yellow', targets: ['180$', 'HEUTE', '260$', '310$', '380$'], report: { ew: 'Hohe Vola in unregelmäßiger Korrektur', fib: 'Support-Zone um $200 aktiv', trigger: '$240.00 Ausbruch' } },
+            { id: 'rklb', name: 'Rocket Lab (RKLB)', curr: 'USD', type: 'stock', symbol: 'RKLB', ew: 'Welle 1 Mid-Cap Impuls', price: 10.40, rsi: 71, crv: 5.2, badge: 'BULLISCH', bClass: 'badge-bullish', targets: ['6.5$', 'HEUTE', '16$', '24$', '35$'], report: { ew: 'Frühe Phase einer makrozyklischen Welle 1', fib: 'Breakout über 0.618 Fib ($9.50)', trigger: '$11.80 Jahreshoch' } }
+        ];
+
         window.onload = function() {
-            initCharts();
-            loadAssetData();
-            fetchFearAndGreed();
-            renderEtfFlows();
+            renderDashboardCards();
+            renderBottomMatrix();
         };
 
-        function initCharts() {
-            const chartOptions = {
-                layout: { backgroundColor: '#151a23', textColor: '#848e9c' },
-                grid: { vertLines: { color: '#262d3d' }, horzLines: { color: '#262d3d' } },
-                timeScale: { borderColor: '#262d3d' },
-                crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
-            };
-
-            // Main Candlestick Chart
-            mainChart = LightweightCharts.createChart(document.getElementById('main-chart'), chartOptions);
-            candleSeries = mainChart.addCandlestickSeries({
-                upColor: '#0ecb81', downColor: '#f6465d', borderVisible: false, wickUpColor: '#0ecb81', wickDownColor: '#f6465d'
-            });
-
-            ema50Series = mainChart.addLineSeries({ color: '#ff9800', lineWidth: 1.5, title: 'EMA 50' });
-            ema200Series = mainChart.addLineSeries({ color: '#2962ff', lineWidth: 1.5, title: 'EMA 200' });
-
-            // RSI Subplot Chart
-            rsiChart = LightweightCharts.createChart(document.getElementById('rsi-chart'), {
-                ...chartOptions,
-                timeScale: { visible: false }
-            });
-            rsiSeries = rsiChart.addLineSeries({ color: '#9c27b0', lineWidth: 1.5, title: 'RSI 14' });
-        }
-
-        async function loadAssetData() {
-            const symbol = document.getElementById('asset-select').value;
+        function renderDashboardCards() {
+            const container = document.getElementById('grid-container');
             
-            // 1. Fetch Daily Kline Data from Binance API
-            const res = await fetch(`https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=1d&limit=200`);
-            const data = await res.json();
+            // Generate Asset Cards for Panels 1 to 7
+            assets.forEach((asset, index) => {
+                const cardHtml = `
+                    <div class="card" id="card-${asset.id}">
+                        <div>
+                            <div class="card-header">
+                                <div>
+                                    <div class="asset-title">PANEL ${index + 1}: ${asset.name}</div>
+                                    <div class="asset-price" id="price-${asset.id}">
+                                        ${asset.curr === 'EUR' ? '€' : '$'}${asset.price.toLocaleString()}
+                                    </div>
+                                    <span class="ew-phase">${asset.ew}</span>
+                                </div>
+                            </div>
 
-            let candles = [];
-            let closePrices = [];
+                            <!-- Chart Canvas -->
+                            <div class="chart-container" id="chart-${asset.id}"></div>
 
-            data.forEach(d => {
-                const time = d[0] / 1000;
-                const open = parseFloat(d[1]);
-                const high = parseFloat(d[2]);
-                const low = parseFloat(d[3]);
-                const close = parseFloat(d[4]);
-                
-                candles.push({ time, open, high, low, close });
-                closePrices.push(close);
-            });
+                            <!-- Timeline X-Axis -->
+                            <div class="timeline-axis">
+                                <span>${asset.targets[0]}</span>
+                                <span style="color:var(--accent-steel);">HEUTE</span>
+                                <span>1J: ${asset.targets[2]}</span>
+                                <span>2J: ${asset.targets[3]}</span>
+                                <span>3J: ${asset.targets[4]}</span>
+                            </div>
 
-            // Set Price Header Data
-            const latestPrice = closePrices[closePrices.length - 1];
-            const prevPrice = closePrices[closePrices.length - 2];
-            const pctChange = (((latestPrice - prevPrice) / prevPrice) * 100).toFixed(2);
-            
-            document.getElementById('current-price').innerText = `$${latestPrice.toLocaleString()}`;
-            const changeEl = document.getElementById('price-change');
-            changeEl.innerText = `${pctChange > 0 ? '+' : ''}${pctChange}%`;
-            changeEl.style.color = pctChange >= 0 ? 'var(--green)' : 'var(--red)';
+                            <!-- Integrated Compact Report -->
+                            <div class="report-block">
+                                <ul>
+                                    <li><b>• EW:</b> ${asset.report.ew}</li>
+                                    <li><b>• Fib:</b> ${asset.report.fib}</li>
+                                    <li><b>• RSI & Vol:</b> RSI: ${asset.rsi} | Volume: Stabil</li>
+                                    <li><b>• CRV & Trigger:</b> <b>CRV ${asset.crv}</b> | Trigger: ${asset.report.trigger}</li>
+                                </ul>
+                            </div>
+                        </div>
 
-            // Compute EMAs and RSI
-            const ema50Data = calculateEMA(candles, 50);
-            const ema200Data = calculateEMA(candles, 200);
-            const rsiData = calculateRSI(candles, 14);
-
-            candleSeries.setData(candles);
-            ema50Series.setData(ema50Data);
-            ema200Series.setData(ema200Data);
-            rsiSeries.setData(rsiData);
-
-            // Add Resistance/Support Lines
-            drawSupportResistance(latestPrice);
-            updatePriceTargets(latestPrice);
-        }
-
-        // EMA Calculation
-        function calculateEMA(candles, period) {
-            let k = 2 / (period + 1);
-            let emaData = [];
-            let ema = candles[0].close;
-            
-            for (let i = 0; i < candles.length; i++) {
-                ema = candles[i].close * k + ema * (1 - k);
-                if (i >= period) emaData.push({ time: candles[i].time, value: ema });
-            }
-            return emaData;
-        }
-
-        // RSI Calculation
-        function calculateRSI(candles, period) {
-            let rsiData = [];
-            let gains = 0, losses = 0;
-
-            for (let i = 1; i <= period; i++) {
-                let diff = candles[i].close - candles[i - 1].close;
-                if (diff >= 0) gains += diff; else losses -= diff;
-            }
-
-            let avgGain = gains / period;
-            let avgLoss = losses / period;
-
-            for (let i = period + 1; i < candles.length; i++) {
-                let diff = candles[i].close - candles[i - 1].close;
-                let gain = diff >= 0 ? diff : 0;
-                let loss = diff < 0 ? -diff : 0;
-
-                avgGain = (avgGain * (period - 1) + gain) / period;
-                avgLoss = (avgLoss * (period - 1) + loss) / period;
-
-                let rs = avgGain / avgLoss;
-                let rsi = 100 - (100 / (1 + rs));
-                rsiData.push({ time: candles[i].time, value: rsi });
-            }
-            return rsiData;
-        }
-
-        function drawSupportResistance(currentPrice) {
-            // Horizontal Price Lines Example
-            candleSeries.createPriceLine({ price: currentPrice * 1.08, color: '#f6465d', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed, title: 'Resistance R1' });
-            candleSeries.createPriceLine({ price: currentPrice * 0.94, color: '#0ecb81', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed, title: 'Support S1' });
-        }
-
-        async function fetchFearAndGreed() {
-            try {
-                const res = await fetch('https://api.alternative.me/fng/');
-                const data = await res.json();
-                const val = data.data[0].value;
-                document.getElementById('fg-val').innerText = `${val}/100 (${data.data[0].value_classification})`;
-                document.getElementById('fg-bar').style.width = `${val}%`;
-            } catch(e) { console.log(e); }
-        }
-
-        function renderEtfFlows() {
-            const flows = [
-                { day: 'Mo', val: 240 }, { day: 'Di', val: 410 },
-                { day: 'Mi', val: -65 }, { day: 'Do', val: 320 }, { day: 'Fr', val: 175 }
-            ];
-            const container = document.getElementById('etf-flows-list');
-            container.innerHTML = flows.map(f => `
-                <div style="display:flex; align-items:center; font-size:0.75rem; margin-bottom:4px;">
-                    <span style="width:25px;">${f.day}</span>
-                    <div style="flex-grow:1; margin:0 8px;">
-                        <div class="inline-bar" style="width:${Math.abs(f.val)/5}px; background:${f.val>=0?'var(--green)':'var(--red)'}"></div>
+                        <div class="card-footer">
+                            <span class="fine-print">Macro: Risk-On | Hindenburg: Clean</span>
+                            <span class="badge ${asset.bClass}">${asset.badge}</span>
+                        </div>
                     </div>
-                    <span>${f.val > 0 ? '+' : ''}${f.val}M</span>
+                `;
+                
+                // Insert before Panel 8
+                container.insertAdjacentHTML('beforeend', cardHtml);
+                initAssetChart(asset);
+            });
+
+            // Re-append Panel 8 & Panel 9 to ensure correct order
+            const macroCards = document.querySelectorAll('.macro-card');
+            macroCards.forEach(card => container.appendChild(card));
+        }
+
+        function initAssetChart(asset) {
+            setTimeout(() => {
+                const chartEl = document.getElementById(`chart-${asset.id}`);
+                if (!chartEl) return;
+
+                const chart = LightweightCharts.createChart(chartEl, {
+                    layout: { backgroundColor: '#ffffff', textColor: '#5a6a7b' },
+                    grid: { vertLines: { color: '#f0f4f8' }, horzLines: { color: '#f0f4f8' } },
+                    timeScale: { visible: false },
+                    rightPriceScale: { borderVisible: false }
+                });
+
+                const lineSeries = chart.addLineSeries({ color: '#1f77b4', lineWidth: 2 });
+                const ema50 = chart.addLineSeries({ color: '#2ca02c', lineWidth: 1.5 });
+                const ema200 = chart.addLineSeries({ color: '#f1c40f', lineWidth: 1.5 });
+
+                // Simulate historical + future trend projection data
+                let basePrice = asset.price * 0.85;
+                let data = [];
+                let ema50Data = [];
+                let ema200Data = [];
+
+                for (let i = 0; i < 40; i++) {
+                    let date = `2026-0${Math.floor(i/10)+1}-${(i%28)+1}`;
+                    basePrice += (Math.random() - 0.45) * (basePrice * 0.03);
+                    data.push({ time: i, value: basePrice });
+                    ema50Data.push({ time: i, value: basePrice * 0.98 });
+                    ema200Data.push({ time: i, value: basePrice * 0.92 });
+                }
+
+                lineSeries.setData(data);
+                ema50.setData(ema50Data);
+                ema200.setData(ema200Data);
+                chart.timeScale().fitContent();
+            }, 100);
+        }
+
+        function renderBottomMatrix() {
+            const container = document.getElementById('crv-items-container');
+            container.innerHTML = assets.map(a => `
+                <div class="crv-item">
+                    ${a.id.toUpperCase()}: <span class="crv-val">${a.crv}</span>
                 </div>
             `).join('');
-        }
-
-        function updatePriceTargets(price) {
-            const body = document.getElementById('scenarios-body');
-            body.innerHTML = `
-                <tr><td>1-4W</td><td>$${(price*0.93).toFixed(0)}</td><td><b>$${(price*1.05).toFixed(0)}</b></td><td>$${(price*1.12).toFixed(0)}</td></tr>
-                <tr><td>3-6M</td><td>$${(price*0.85).toFixed(0)}</td><td><b>$${(price*1.25).toFixed(0)}</b></td><td>$${(price*1.45).toFixed(0)}</td></tr>
-                <tr><td>12-24M</td><td>$${(price*0.75).toFixed(0)}</td><td><b>$${(price*1.75).toFixed(0)}</b></td><td>$${(price*2.20).toFixed(0)}</td></tr>
-            `;
         }
     </script>
 </body>
