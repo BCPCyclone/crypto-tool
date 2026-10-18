@@ -30,23 +30,14 @@
         body { background-color: var(--bg-global); color: var(--text-dark); padding: 12px; padding-bottom: 70px; }
 
         header { display: flex; justify-content: space-between; align-items: center; padding: 10px 4px; margin-bottom: 12px; }
-        h1 { font-size: 1.1rem; font-weight: 800; color: var(--text-dark); letter-spacing: -0.5px; }
-        .sub-tag { font-size: 0.75rem; background: var(--accent-steel); color: #fff; padding: 3px 8px; border-radius: 6px; font-weight: 600; }
+        h1 { font-size: 1.05rem; font-weight: 800; color: var(--text-dark); letter-spacing: -0.5px; }
+        
+        .btn-manage { background: var(--accent-steel); color: #fff; border: none; padding: 6px 12px; border-radius: 6px; font-weight: 600; font-size: 0.75rem; cursor: pointer; }
 
-        /* 3x3 Grid Layout */
-        .dashboard-grid {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 12px;
-        }
-
-        @media(min-width: 768px) {
-            .dashboard-grid { grid-template-columns: repeat(2, 1fr); }
-        }
-
-        @media(min-width: 1200px) {
-            .dashboard-grid { grid-template-columns: repeat(3, 1fr); }
-        }
+        /* Grid Layout */
+        .dashboard-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+        @media(min-width: 768px) { .dashboard-grid { grid-template-columns: repeat(2, 1fr); } }
+        @media(min-width: 1200px) { .dashboard-grid { grid-template-columns: repeat(3, 1fr); } }
 
         /* Subplot Cards */
         .card {
@@ -66,18 +57,15 @@
         .asset-price { font-size: 1.15rem; font-weight: 800; margin-top: 2px; }
         .ew-phase { font-size: 0.75rem; font-weight: 700; color: var(--accent-steel); background: #eef5fc; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-top: 2px; }
 
-        .chart-container { width: 100%; height: 180px; margin: 8px 0; border-radius: 6px; overflow: hidden; }
+        .chart-container { width: 100%; height: 160px; margin: 8px 0; border-radius: 6px; overflow: hidden; }
 
-        /* Report Bullet Points */
         .report-block { font-size: 0.78rem; color: var(--text-dark); line-height: 1.45; margin-top: 8px; border-top: 1px solid #f0f4f8; padding-top: 8px; }
         .report-block ul { list-style: none; }
         .report-block li { margin-bottom: 3px; }
         .report-block strong { color: var(--text-muted); }
 
-        /* Timeline X-Axis */
         .timeline-axis { display: flex; justify-content: space-between; font-size: 0.65rem; font-weight: 700; color: var(--text-muted); background: #f4f8fc; padding: 4px 6px; border-radius: 4px; margin-top: 6px; }
 
-        /* Badges */
         .card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
         .badge { font-size: 0.7rem; font-weight: 800; color: #fff; padding: 4px 10px; border-radius: 4px; text-transform: uppercase; }
         .badge-bullish { background: var(--badge-green); }
@@ -85,27 +73,36 @@
         .badge-neutral { background: var(--badge-yellow); }
         .fine-print { font-size: 0.65rem; color: var(--text-muted); }
 
-        /* Global Macro & Legend Panels */
+        .btn-delete { background: none; border: none; color: var(--badge-red); font-size: 0.75rem; font-weight: 700; cursor: pointer; padding: 2px 6px; }
+
+        /* Macro & Legend Cards */
         .macro-card { background: #f8fafc; border: 1px dashed var(--accent-steel); }
         .macro-title { font-size: 0.9rem; font-weight: 800; color: var(--accent-steel); margin-bottom: 8px; }
         .macro-list { font-size: 0.8rem; line-height: 1.6; list-style: none; }
 
+        /* Modal Overlay */
+        #modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5); display: none;
+            justify-content: center; align-items: center; z-index: 2000; padding: 15px;
+        }
+        .modal-content {
+            background: #fff; width: 100%; max-width: 400px; border-radius: 12px; padding: 20px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        }
+        .modal-content h3 { margin-bottom: 12px; font-size: 1.1rem; }
+        .form-group { margin-bottom: 10px; }
+        .form-group label { display: block; font-size: 0.75rem; font-weight: 600; color: var(--text-muted); margin-bottom: 3px; }
+        .form-group input, .form-group select { width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.9rem; }
+        .modal-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 15px; }
+
         /* Bottom CRV Banner */
         .bottom-banner {
-            position: fixed;
-            bottom: 0; left: 0; right: 0;
-            background: var(--banner-bg);
-            color: #ffffff;
-            padding: 10px 16px;
-            font-size: 0.78rem;
-            font-weight: 700;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            overflow-x: auto;
-            white-space: nowrap;
-            box-shadow: 0 -4px 12px rgba(0,0,0,0.15);
-            z-index: 1000;
+            position: fixed; bottom: 0; left: 0; right: 0;
+            background: var(--banner-bg); color: #ffffff; padding: 10px 16px;
+            font-size: 0.78rem; font-weight: 700; display: flex; align-items: center;
+            justify-content: space-between; overflow-x: auto; white-space: nowrap;
+            box-shadow: 0 -4px 12px rgba(0,0,0,0.15); z-index: 1000;
         }
         .crv-item { margin-right: 14px; font-family: monospace; }
         .crv-val { color: var(--badge-green); font-weight: 800; }
@@ -115,122 +112,142 @@
 
     <header>
         <div>
-            <h1>QUANTITATIVE RESEARCH TERMINAL</h1>
-            <div style="font-size:0.75rem; color:var(--text-muted);">Elliott Wave & Multi-Asset Dashboard</div>
+            <h1>QUANT TERMINAL</h1>
+            <div style="font-size:0.7rem; color:var(--text-muted);">Customizable Asset Dashboard</div>
         </div>
-        <span class="sub-tag">3-YEAR TIMELINE PROJECTION</span>
+        <button class="btn-manage" onclick="openModal()">⚙️ Asset hinzufügen</button>
     </header>
 
     <div class="dashboard-grid" id="grid-container">
-        <!-- Panels 1-7 (Asset Cards) will be generated by JS -->
+        <!-- Panels werden dynamisch generiert -->
         
-        <!-- Panel 8: Global Macro Risk Monitor -->
-        <div class="card macro-card">
-            <div class="macro-title">PANEL 8: RISIKO-MONITOR (GLOBAL MACRO)</div>
+        <!-- Panel 8: Global Macro -->
+        <div class="card macro-card" id="panel-macro">
+            <div class="macro-title">PANEL 8: RISIKO-MONITOR (GLOBAL)</div>
             <ul class="macro-list">
-                <li>• <b>Hindenburg-Omen:</b> <span style="color:var(--badge-green); font-weight:bold;">INAKTIV (0 Trigger)</span></li>
-                <li>• <b>Fed Policy:</b> Pivot-Phase / Erwartete Zinsschritte</li>
-                <li>• <b>Liquidity (M2):</b> Moderate Expansion (Global Risk-On)</li>
-                <li>• <b>VIX Index:</b> 14.50 (Stabil / Niedrige Volatilität)</li>
-                <li>• <b>Sektor-Rotation:</b> Tech Growth & Quality Value</li>
+                <li>• <b>Hindenburg-Omen:</b> <span style="color:var(--badge-green); font-weight:bold;">INAKTIV</span></li>
+                <li>• <b>Fed Policy:</b> Pivot-Phase / Zinssenkungen</li>
+                <li>• <b>Liquidity (M2):</b> Moderate Expansion</li>
+                <li>• <b>VIX Index:</b> 14.50 (Stabil)</li>
             </ul>
         </div>
 
-        <!-- Panel 9: System-Legende & Guide -->
-        <div class="card macro-card">
-            <div class="macro-title">PANEL 9: SYSTEM-LEGENDE & GUIDE</div>
+        <!-- Panel 9: Legend -->
+        <div class="card macro-card" id="panel-legend">
+            <div class="macro-title">PANEL 9: SYSTEM-LEGENDE</div>
             <ul class="macro-list">
-                <li>• <span style="color:var(--ema-50); font-weight:bold;">— EMA 50:</span> Kurzfristiger Trendfilter</li>
-                <li>• <span style="color:var(--ema-200); font-weight:bold;">— EMA 200:</span> Makro-Trendanker (Support/Resistance)</li>
-                <li>• <b>Geometric Path:</b> EW-Struktur & 3-Jahre-Zielprojektion</li>
-                <li>• <b>X-Achse:</b> Breakout → HEUTE → 1J → 2J → 3J Targets</li>
-                <li>• <b>Badges:</b> <span style="color:var(--badge-green)">BULLISCH</span> | <span style="color:var(--badge-yellow)">NEUTRAL</span> | <span style="color:var(--badge-red)">BEARISH</span></li>
+                <li>• <span style="color:var(--ema-50); font-weight:bold;">— EMA 50:</span> Trendfilter</li>
+                <li>• <span style="color:var(--ema-200); font-weight:bold;">— EMA 200:</span> Makro-Anker</li>
+                <li>• <b>X-Achse:</b> Breakout → HEUTE → 3J Targets</li>
             </ul>
         </div>
     </div>
 
-    <!-- Bottom CRV Comparison Bar -->
-    <div class="bottom-banner" id="crv-banner">
-        <span>BODEN-MATRIX (CRV COMPARISON):</span>
+    <!-- Bottom CRV Banner -->
+    <div class="bottom-banner">
+        <span>CRV MATRIX:</span>
         <div id="crv-items-container" style="display:flex;"></div>
     </div>
 
+    <!-- Modal für Asset Hinzufügen -->
+    <div id="modal-overlay">
+        Neues Asset hinzufügen
+        <div class="modal-content">
+            <h3>Neues Asset erfassen</h3>
+            <div class="form-group">
+                <label>Name & Ticker (z.B. Ethereum (ETH))</label>
+                <input type="text" id="input-name" placeholder="Ethereum (ETH)">
+            </div>
+            <div class="form-group">
+                <label>Währung</label>
+                <select id="input-curr"><option value="USD">USD ($)</option><option value="EUR">EUR (€)</option></select>
+            </div>
+            <div class="form-group">
+                <label>Aktueller Preis</label>
+                <input type="number" id="input-price" placeholder="3200">
+            </div>
+            <div class="form-group">
+                <label>Sentiment / Badge</label>
+                <select id="input-badge">
+                    <option value="BULLISCH">BULLISCH</option>
+                    <option value="NEUTRAL">NEUTRAL</option>
+                    <option value="BEARISH">BEARISH</option>
+                </select>
+            </div>
+            <div class="modal-buttons">
+                <button class="btn-manage" style="background:#848e9c;" onclick="closeModal()">Abbrechen</button>
+                <button class="btn-manage" onclick="saveNewAsset()">Speichern</button>
+            </div>
+        </div>
+    </div>
+
     <script>
-        // Assets Spezifikation
-        const assets = [
-            { id: 'btc', name: 'Bitcoin (BTC)', curr: 'USD', type: 'crypto', symbol: 'BTCUSDT', ew: 'Welle 3 Impuls', price: 85400, rsi: 62, crv: 4.8, badge: 'BULLISCH', bClass: 'badge-bullish', targets: ['78k', 'HEUTE', '115k', '140k', '180k'], report: { ew: 'Akkumulation im primären Impulsbein', fib: '0.618 Retracement bei $81.500 gehalten', trigger: '$88.000 Breakout' } },
-            { id: 'mbg', name: 'Mercedes-Benz (MBG)', curr: 'EUR', type: 'stock', symbol: 'MBG.DE', ew: 'Welle (4) Korrektur', price: 58.20, rsi: 44, crv: 2.1, badge: 'NEUTRAL', bClass: 'badge-yellow', targets: ['52€', 'HEUTE', '64€', '72€', '80€'], report: { ew: 'Seitwärts-Konsolidierung in Welle (4)', fib: '0.50 Fib Support bei 55.00€', trigger: '60.50€ Ausbruch' } },
-            { id: 'alv', name: 'Allianz (ALV)', curr: 'EUR', type: 'stock', symbol: 'ALV.DE', ew: 'Welle 5 Ausfächerung', price: 285.50, rsi: 68, crv: 2.3, badge: 'BULLISCH', bClass: 'badge-bullish', targets: ['260€', 'HEUTE', '310€', '335€', '360€'], report: { ew: 'Starke finale Impulswelle nach oben', fib: '1.618 Extension-Ziel erreicht', trigger: '290.00€ Ath-Test' } },
-            { id: 'aapl', name: 'Apple (AAPL)', curr: 'USD', type: 'stock', symbol: 'AAPL', ew: 'Welle 3 Trendfortsetzung', price: 232.10, rsi: 59, crv: 3.1, badge: 'BULLISCH', bClass: 'badge-bullish', targets: ['215$', 'HEUTE', '260$', '290$', '320$'], report: { ew: 'Intakter Aufwärtstrend über EMA 50', fib: 'Support-Cluster bei $220 gepuffert', trigger: '$238.00 Allzeit-Hoch' } },
-            { id: 'googl', name: 'Alphabet A (GOOGL)', curr: 'USD', type: 'stock', symbol: 'GOOGL', ew: 'Welle C Rebound', price: 165.40, rsi: 51, crv: 3.5, badge: 'BULLISCH', bClass: 'badge-bullish', targets: ['150$', 'HEUTE', '195$', '220$', '250$'], report: { ew: 'Bodenbildung in Welle C abgeschlossen', fib: '0.382 Fib Rebound bei $160', trigger: '$172.00 Widerstand' } },
-            { id: 'tsla', name: 'Tesla (TSLA)', curr: 'USD', type: 'stock', symbol: 'TSLA', ew: 'Welle (B) Volatilität', price: 218.80, rsi: 47, crv: 2.9, badge: 'NEUTRAL', bClass: 'badge-yellow', targets: ['180$', 'HEUTE', '260$', '310$', '380$'], report: { ew: 'Hohe Vola in unregelmäßiger Korrektur', fib: 'Support-Zone um $200 aktiv', trigger: '$240.00 Ausbruch' } },
-            { id: 'rklb', name: 'Rocket Lab (RKLB)', curr: 'USD', type: 'stock', symbol: 'RKLB', ew: 'Welle 1 Mid-Cap Impuls', price: 10.40, rsi: 71, crv: 5.2, badge: 'BULLISCH', bClass: 'badge-bullish', targets: ['6.5$', 'HEUTE', '16$', '24$', '35$'], report: { ew: 'Frühe Phase einer makrozyklischen Welle 1', fib: 'Breakout über 0.618 Fib ($9.50)', trigger: '$11.80 Jahreshoch' } }
+        // Standard-Assets (falls kein LocalStorage vorhanden)
+        const defaultAssets = [
+            { id: 'btc', name: 'Bitcoin (BTC)', curr: 'USD', price: 85400, rsi: 62, crv: 4.8, badge: 'BULLISCH', bClass: 'badge-bullish', ew: 'Welle 3 Impuls', targets: ['78k', 'HEUTE', '115k', '140k', '180k'] },
+            { id: 'aapl', name: 'Apple (AAPL)', curr: 'USD', price: 232.10, rsi: 59, crv: 3.1, badge: 'BULLISCH', bClass: 'badge-bullish', ew: 'Welle 3 Trend', targets: ['215$', 'HEUTE', '260$', '290$', '320$'] }
         ];
 
+        let assets = JSON.parse(localStorage.getItem('custom_crypto_assets')) || defaultAssets;
+
         window.onload = function() {
-            renderDashboardCards();
-            renderBottomMatrix();
+            renderDashboard();
         };
 
-        function renderDashboardCards() {
+        function renderDashboard() {
             const container = document.getElementById('grid-container');
             
-            // Generate Asset Cards for Panels 1 to 7
+            // Entferne alte Asset-Cards (behalte Makro & Legend)
+            document.querySelectorAll('.asset-card').forEach(el => el.remove());
+
+            // Rendere Asset Cards neu
             assets.forEach((asset, index) => {
+                const bClass = asset.badge === 'BULLISCH' ? 'badge-bullish' : asset.badge === 'BEARISH' ? 'badge-bearish' : 'badge-neutral';
+                
                 const cardHtml = `
-                    <div class="card" id="card-${asset.id}">
+                    <div class="card asset-card" id="card-${asset.id}">
                         <div>
                             <div class="card-header">
                                 <div>
                                     <div class="asset-title">PANEL ${index + 1}: ${asset.name}</div>
-                                    <div class="asset-price" id="price-${asset.id}">
-                                        ${asset.curr === 'EUR' ? '€' : '$'}${asset.price.toLocaleString()}
-                                    </div>
-                                    <span class="ew-phase">${asset.ew}</span>
+                                    <div class="asset-price">${asset.curr === 'EUR' ? '€' : '$'}${Number(asset.price).toLocaleString()}</div>
+                                    <span class="ew-phase">${asset.ew || 'Welle 3 Impuls'}</span>
                                 </div>
+                                <button class="btn-delete" onclick="deleteAsset('${asset.id}')">Löschen</button>
                             </div>
 
-                            <!-- Chart Canvas -->
                             <div class="chart-container" id="chart-${asset.id}"></div>
 
-                            <!-- Timeline X-Axis -->
                             <div class="timeline-axis">
-                                <span>${asset.targets[0]}</span>
+                                <span>${asset.targets ? asset.targets[0] : 'Low'}</span>
                                 <span style="color:var(--accent-steel);">HEUTE</span>
-                                <span>1J: ${asset.targets[2]}</span>
-                                <span>2J: ${asset.targets[3]}</span>
-                                <span>3J: ${asset.targets[4]}</span>
+                                <span>3J: ${asset.targets ? asset.targets[4] : 'Target'}</span>
                             </div>
 
-                            <!-- Integrated Compact Report -->
                             <div class="report-block">
                                 <ul>
-                                    <li><b>• EW:</b> ${asset.report.ew}</li>
-                                    <li><b>• Fib:</b> ${asset.report.fib}</li>
-                                    <li><b>• RSI & Vol:</b> RSI: ${asset.rsi} | Volume: Stabil</li>
-                                    <li><b>• CRV & Trigger:</b> <b>CRV ${asset.crv}</b> | Trigger: ${asset.report.trigger}</li>
+                                    <li><b>• RSI & Vol:</b> RSI: ${asset.rsi || 55} | CRV: <b>${asset.crv || 3.0}</b></li>
                                 </ul>
                             </div>
                         </div>
 
                         <div class="card-footer">
-                            <span class="fine-print">Macro: Risk-On | Hindenburg: Clean</span>
-                            <span class="badge ${asset.bClass}">${asset.badge}</span>
+                            <span class="fine-print">Custom Asset</span>
+                            <span class="badge ${bClass}">${asset.badge}</span>
                         </div>
                     </div>
                 `;
                 
-                // Insert before Panel 8
-                container.insertAdjacentHTML('beforeend', cardHtml);
-                initAssetChart(asset);
+                // Vor Panel 8 einfügen
+                const macroPanel = document.getElementById('panel-macro');
+                macroPanel.insertAdjacentHTML('beforebegin', cardHtml);
+                initChart(asset);
             });
 
-            // Re-append Panel 8 & Panel 9 to ensure correct order
-            const macroCards = document.querySelectorAll('.macro-card');
-            macroCards.forEach(card => container.appendChild(card));
+            renderBottomMatrix();
         }
 
-        function initAssetChart(asset) {
+        function initChart(asset) {
             setTimeout(() => {
                 const chartEl = document.getElementById(`chart-${asset.id}`);
                 if (!chartEl) return;
@@ -238,42 +255,66 @@
                 const chart = LightweightCharts.createChart(chartEl, {
                     layout: { backgroundColor: '#ffffff', textColor: '#5a6a7b' },
                     grid: { vertLines: { color: '#f0f4f8' }, horzLines: { color: '#f0f4f8' } },
-                    timeScale: { visible: false },
-                    rightPriceScale: { borderVisible: false }
+                    timeScale: { visible: false }, rightPriceScale: { borderVisible: false }
                 });
 
                 const lineSeries = chart.addLineSeries({ color: '#1f77b4', lineWidth: 2 });
-                const ema50 = chart.addLineSeries({ color: '#2ca02c', lineWidth: 1.5 });
-                const ema200 = chart.addLineSeries({ color: '#f1c40f', lineWidth: 1.5 });
-
-                // Simulate historical + future trend projection data
-                let basePrice = asset.price * 0.85;
+                let basePrice = Number(asset.price) * 0.9;
                 let data = [];
-                let ema50Data = [];
-                let ema200Data = [];
-
-                for (let i = 0; i < 40; i++) {
-                    let date = `2026-0${Math.floor(i/10)+1}-${(i%28)+1}`;
-                    basePrice += (Math.random() - 0.45) * (basePrice * 0.03);
+                for (let i = 0; i < 30; i++) {
+                    basePrice += (Math.random() - 0.45) * (basePrice * 0.02);
                     data.push({ time: i, value: basePrice });
-                    ema50Data.push({ time: i, value: basePrice * 0.98 });
-                    ema200Data.push({ time: i, value: basePrice * 0.92 });
                 }
-
                 lineSeries.setData(data);
-                ema50.setData(ema50Data);
-                ema200.setData(ema200Data);
                 chart.timeScale().fitContent();
-            }, 100);
+            }, 50);
         }
 
         function renderBottomMatrix() {
             const container = document.getElementById('crv-items-container');
             container.innerHTML = assets.map(a => `
                 <div class="crv-item">
-                    ${a.id.toUpperCase()}: <span class="crv-val">${a.crv}</span>
+                    ${a.name.split(' ')[0]}: <span class="crv-val">${a.crv || 3.0}</span>
                 </div>
             `).join('');
+        }
+
+        function openModal() { document.getElementById('modal-overlay').style.display = 'flex'; }
+        function closeModal() { document.getElementById('modal-overlay').style.display = 'none'; }
+
+        function saveNewAsset() {
+            const name = document.getElementById('input-name').value;
+            const curr = document.getElementById('input-curr').value;
+            const price = document.getElementById('input-price').value;
+            const badge = document.getElementById('input-badge').value;
+
+            if(!name || !price) {
+                alert('Bitte Name und Preis angeben.');
+                return;
+            }
+
+            const newId = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+            const newAsset = {
+                id: newId,
+                name: name,
+                curr: curr,
+                price: parseFloat(price),
+                rsi: Math.floor(Math.random() * 30) + 45,
+                crv: (Math.random() * 3 + 2).toFixed(1),
+                badge: badge,
+                targets: [(price*0.8).toFixed(0), 'HEUTE', (price*1.2).toFixed(0), (price*1.5).toFixed(0), (price*2.0).toFixed(0)]
+            };
+
+            assets.push(newAsset);
+            localStorage.setItem('custom_crypto_assets', JSON.stringify(assets));
+            closeModal();
+            renderDashboard();
+        }
+
+        function deleteAsset(id) {
+            assets = assets.filter(a => a.id !== id);
+            localStorage.setItem('custom_crypto_assets', JSON.stringify(assets));
+            renderDashboard();
         }
     </script>
 </body>
