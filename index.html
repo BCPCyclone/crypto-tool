@@ -11,6 +11,7 @@
     <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
 
     <style>
+        /* CSS Variablensystem für Dark & Light Mode */
         :root {
             --bg-global: #e2ecf4;
             --card-bg: #ffffff;
@@ -24,10 +25,28 @@
             --badge-red: #f6465d;
             --badge-yellow: #e6a23c;
             --banner-bg: #1a252f;
+            --banner-text: #ffffff;
+            --chart-bg: #ffffff;
+            --axis-bg: #f4f8fc;
+            --info-bg: #eef5fc;
+        }
+
+        [data-theme="dark"] {
+            --bg-global: #0b0e14;
+            --card-bg: #151a23;
+            --text-dark: #e1e7ec;
+            --text-muted: #848e9c;
+            --border-color: #262d3d;
+            --accent-steel: #3b82f6;
+            --banner-bg: #151a23;
+            --banner-text: #e1e7ec;
+            --chart-bg: #151a23;
+            --axis-bg: #1c2333;
+            --info-bg: #1e293b;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif; }
-        body { background-color: var(--bg-global); color: var(--text-dark); padding: 12px; padding-bottom: 75px; }
+        body { background-color: var(--bg-global); color: var(--text-dark); padding: 12px; padding-bottom: 75px; transition: background 0.3s ease; }
 
         header { display: flex; flex-direction: column; gap: 8px; padding: 10px 4px; margin-bottom: 12px; }
         .top-bar { display: flex; justify-content: space-between; align-items: center; }
@@ -35,10 +54,11 @@
         
         .controls-bar { display: flex; gap: 8px; align-items: center; }
         .btn-action { background: var(--accent-steel); color: #fff; border: none; padding: 6px 10px; border-radius: 6px; font-weight: 600; font-size: 0.75rem; cursor: pointer; }
+        .btn-theme { background: var(--card-bg); color: var(--text-dark); border: 1px solid var(--border-color); padding: 6px 10px; border-radius: 6px; font-weight: 700; font-size: 0.8rem; cursor: pointer; }
 
         select[multiple] {
             width: 100%; height: 70px; border: 1px solid var(--border-color); border-radius: 8px;
-            padding: 4px; background: #fff; font-size: 0.8rem; color: var(--text-dark);
+            padding: 4px; background: var(--card-bg); font-size: 0.8rem; color: var(--text-dark);
         }
 
         /* Grid Layout */
@@ -56,58 +76,68 @@
         .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; }
         .asset-title { font-size: 1.05rem; font-weight: 700; color: var(--text-dark); }
         .asset-price { font-size: 1.15rem; font-weight: 800; margin-top: 2px; }
-        .ew-phase { font-size: 0.75rem; font-weight: 700; color: var(--accent-steel); background: #eef5fc; padding: 3px 8px; border-radius: 4px; display: inline-block; margin-top: 4px; }
+        .ew-phase { font-size: 0.75rem; font-weight: 700; color: var(--accent-steel); background: var(--info-bg); padding: 3px 8px; border-radius: 4px; display: inline-block; margin-top: 4px; }
 
         .chart-container { width: 100%; height: 160px; margin: 8px 0; border-radius: 6px; overflow: hidden; }
 
-        /* Detail Report Blocks */
-        .report-block { font-size: 0.75rem; color: var(--text-dark); line-height: 1.5; margin-top: 8px; border-top: 1px solid #f0f4f8; padding-top: 8px; }
+        /* Detail Report & Tooltip Styles */
+        .report-block { font-size: 0.75rem; color: var(--text-dark); line-height: 1.5; margin-top: 8px; border-top: 1px solid var(--border-color); padding-top: 8px; }
         .report-block ul { list-style: none; }
         .report-block li { margin-bottom: 4px; }
         .report-block strong { color: var(--text-muted); }
 
-        .timeline-axis { display: flex; justify-content: space-between; font-size: 0.65rem; font-weight: 700; color: var(--text-muted); background: #f4f8fc; padding: 4px 6px; border-radius: 4px; margin-top: 6px; }
+        .info-icon {
+            display: inline-block; background: var(--border-color); color: var(--text-dark);
+            border-radius: 50%; width: 14px; height: 14px; text-align: center; font-size: 0.65rem;
+            line-height: 14px; font-weight: bold; cursor: help; margin-left: 3px;
+        }
+
+        .timeline-axis { display: flex; justify-content: space-between; font-size: 0.65rem; font-weight: 700; color: var(--text-muted); background: var(--axis-bg); padding: 4px 6px; border-radius: 4px; margin-top: 6px; }
 
         .card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
-        .badge { font-size: 0.7rem; font-weight: 800; color: #fff; padding: 4px 10px; border-radius: 4px; text-transform: uppercase; }
+        .badge { font-size: 0.68rem; font-weight: 800; color: #fff; padding: 4px 8px; border-radius: 4px; text-transform: uppercase; }
         .badge-bullish { background: var(--badge-green); }
         .badge-bearish { background: var(--badge-red); }
         .badge-neutral { background: var(--badge-yellow); }
 
         .btn-delete { background: none; border: none; color: var(--badge-red); font-size: 0.75rem; font-weight: 700; cursor: pointer; }
 
-        .macro-card { background: #f8fafc; border: 1px dashed var(--accent-steel); }
+        .macro-card { background: var(--card-bg); border: 1px dashed var(--accent-steel); }
         .macro-title { font-size: 0.9rem; font-weight: 800; color: var(--accent-steel); margin-bottom: 8px; }
         .macro-list { font-size: 0.8rem; line-height: 1.6; list-style: none; }
 
         /* Modal */
         #modal-overlay {
             position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.5); display: none;
+            background: rgba(0,0,0,0.6); display: none;
             justify-content: center; align-items: center; z-index: 2000; padding: 15px;
         }
-        .modal-content { background: #fff; width: 100%; max-width: 400px; border-radius: 12px; padding: 20px; }
+        .modal-content { background: var(--card-bg); color: var(--text-dark); width: 100%; max-width: 400px; border-radius: 12px; padding: 20px; border: 1px solid var(--border-color); }
         .form-group { margin-bottom: 10px; }
         .form-group label { display: block; font-size: 0.75rem; font-weight: 600; color: var(--text-muted); margin-bottom: 3px; }
-        .form-group input { width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.9rem; }
+        .form-group input { width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.9rem; background: var(--card-bg); color: var(--text-dark); }
 
         /* Bottom Banner */
         .bottom-banner {
             position: fixed; bottom: 0; left: 0; right: 0;
-            background: var(--banner-bg); color: #ffffff; padding: 10px 16px;
+            background: var(--banner-bg); color: var(--banner-text); padding: 10px 16px;
             font-size: 0.78rem; font-weight: 700; display: flex; align-items: center;
             justify-content: space-between; overflow-x: auto; white-space: nowrap; z-index: 1000;
+            border-top: 1px solid var(--border-color);
         }
         .crv-item { margin-right: 14px; font-family: monospace; }
         .crv-val { color: var(--badge-green); font-weight: 800; }
     </style>
 </head>
-<body>
+<body data-theme="light">
 
     <header>
         <div class="top-bar">
             <h1>QUANT TERMINAL</h1>
-            <button class="btn-action" onclick="openModal()">+ Asset hinzufügen</button>
+            <div class="controls-bar">
+                <button class="btn-theme" id="theme-btn" onclick="toggleTheme()">🌙 Dark</button>
+                <button class="btn-action" onclick="openModal()">+ Asset hinzufügen</button>
+            </div>
         </div>
         <div>
             <label style="font-size:0.7rem; color:var(--text-muted); font-weight:bold;">Aktive Assets auswählen (1 bis max. 3 gleichzeitig):</label>
@@ -122,28 +152,29 @@
         <div class="card macro-card" id="panel-macro">
             <div class="macro-title">PANEL 8: RISIKO-MONITOR (GLOBAL MACRO)</div>
             <ul class="macro-list">
-                <li>• <b>Hindenburg-Omen:</b> <span style="color:var(--badge-green); font-weight:bold;">INAKTIV (0 Trigger)</span></li>
-                <li>• <b>Fed Policy:</b> Pivot-Phase / Zinssenkungszyklus</li>
-                <li>• <b>Liquidity (M2):</b> Moderate Expansion (Global Risk-On)</li>
-                <li>• <b>VIX Index:</b> 14.50 (Stabil / Niedrige Volatilität)</li>
+                <li>• <b>Hindenburg-Omen <span class="info-icon" title="Warnsignal für bevorstehende Börsencrashs. 'Inaktiv' bedeutet ruhiges Fahrwasser.">?</span>:</b> <span style="color:var(--badge-green); font-weight:bold;">INAKTIV (0 Trigger)</span></li>
+                <li>• <b>Fed Policy <span class="info-icon" title="Zinspolitik der US-Notenbank. Zinssenkungen bringen neue Liquidität in Aktien & Krypto.">?</span>:</b> Pivot-Phase / Zinssenkungszyklus</li>
+                <li>• <b>Liquidity (M2) <span class="info-icon" title="Globale Geldmenge. Steigt M2, fließt Geld in spekulative Sachwerte.">?</span>:</b> Moderate Expansion (Global Risk-On)</li>
+                <li>• <b>VIX Index <span class="info-icon" title="Angst-Index der Börse. Werte unter 18 signalisieren Stabilität.">?</span>:</b> 14.50 (Niedrige Volatilität)</li>
             </ul>
         </div>
 
-        <!-- Panel 9: Legend -->
+        <!-- Panel 9: Anfänger-Leitfaden & Kennzahlen-Guide -->
         <div class="card macro-card" id="panel-legend">
-            <div class="macro-title">PANEL 9: SYSTEM-LEGENDE & GUIDE</div>
-            <ul class="macro-list">
-                <li>• <span style="color:var(--ema-50); font-weight:bold;">— EMA 50:</span> Kurzfristiger Trendfilter</li>
-                <li>• <span style="color:var(--ema-200); font-weight:bold;">— EMA 200:</span> Makro-Trendanker</li>
-                <li>• <b>EW-Struktur:</b> Automatischer Wellen-Kalkulator</li>
-                <li>• <b>X-Achse:</b> Breakout → HEUTE → 1J → 2J → 3J Targets</li>
+            <div class="macro-title">PANEL 9: ANFÄNGER-GUIDE & LEGENDE</div>
+            <ul class="macro-list" style="font-size:0.75rem;">
+                <li>• <b>Chart-Linien:</b> <span style="color:var(--ema-50)">Grün = EMA 50 (Kurzzeit-Trend)</span> | <span style="color:var(--ema-200)">Gelb = EMA 200 (Langzeit-Trend)</span></li>
+                <li>• <b>Elliott Wave (EW):</b> Beschreibt den Rhythmus von Trends (1-5 = Ausbruch, A-C = Korrektur).</li>
+                <li>• <b>Fibonacci (Fib):</b> Mathematische Preis-Zonen, an denen Kurse historisch drehen.</li>
+                <li>• <b>RSI:</b> >70 = Überkauft (Vorsicht), <40 = Unterverkauft (Chance).</li>
+                <li>• <b>CRV:</b> Chance-Risiko-Verhältnis. Je höher als 2.0, desto attraktiver der Einstieg.</li>
             </ul>
         </div>
     </div>
 
     <!-- Bottom Banner -->
     <div class="bottom-banner">
-        <span>BODEN-MATRIX (CRV MATRIX):</span>
+        <span>BODEN-MATRIX (SYSTEM CRV):</span>
         <div id="crv-items-container" style="display:flex;"></div>
     </div>
 
@@ -171,13 +202,27 @@
             { symbol: 'SOLUSDT', name: 'Solana (SOL)', curr: 'USD' }
         ];
 
-        let myAssets = JSON.parse(localStorage.getItem('quant_assets_v3')) || defaultAssets;
+        let myAssets = JSON.parse(localStorage.getItem('quant_assets_v4')) || defaultAssets;
         let selectedSymbols = [myAssets[0].symbol];
+        let currentTheme = localStorage.getItem('app_theme') || 'light';
 
         window.onload = function() {
+            setTheme(currentTheme);
             populatePicker();
             updateSelectedView();
         };
+
+        function toggleTheme() {
+            currentTheme = currentTheme === 'light' ? 'dark' : 'light';
+            setTheme(currentTheme);
+        }
+
+        function setTheme(theme) {
+            document.body.setAttribute('data-theme', theme);
+            localStorage.setItem('app_theme', theme);
+            document.getElementById('theme-btn').innerText = theme === 'light' ? '🌙 Dark' : '☀️ Light';
+            if(selectedSymbols.length > 0) renderGrid();
+        }
 
         function populatePicker() {
             const picker = document.getElementById('asset-picker');
@@ -208,7 +253,7 @@
                 const asset = activeAssets[i];
                 const marketData = await fetchMarketData(asset.symbol);
 
-                // Quantitative Quant-Analytics Berechnungen
+                // Quant-Analytics Engine
                 const quant = calculateQuantMetrics(marketData);
                 crvMatrixData.push({ symbol: asset.symbol, crv: quant.crv });
 
@@ -219,7 +264,7 @@
                                 <div>
                                     <div class="asset-title">${asset.name}</div>
                                     <div class="asset-price">${asset.curr === 'EUR' ? '€' : '$'}${marketData.price.toLocaleString()}</div>
-                                    <span class="ew-phase">${quant.ewPhase}</span>
+                                    <span class="ew-phase" title="Das ist die aktuelle Musterphase nach Elliott Wave.">${quant.ewPhase}</span>
                                 </div>
                                 <button class="btn-delete" onclick="deleteAsset('${asset.symbol}')">Löschen</button>
                             </div>
@@ -228,27 +273,27 @@
 
                             <!-- 3-Jahres Timeline X-Achse -->
                             <div class="timeline-axis">
-                                <span>Support: $${quant.support}</span>
+                                <span title="Unterstützungsebene">Support: $${quant.support}</span>
                                 <span style="color:var(--accent-steel);">HEUTE</span>
-                                <span>1J: $${quant.target1J}</span>
-                                <span>2J: $${quant.target2J}</span>
-                                <span>3J: $${quant.target3J}</span>
+                                <span title="Prognose 1 Jahr">1J: $${quant.target1J}</span>
+                                <span title="Prognose 2 Jahre">2J: $${quant.target2J}</span>
+                                <span title="Prognose 3 Jahre">3J: $${quant.target3J}</span>
                             </div>
 
-                            <!-- Detaillierter Report Block (EW, Fib, RSI, CRV) -->
+                            <!-- Detaillierter Report Block mit Anfänger-Tooltips -->
                             <div class="report-block">
                                 <ul>
-                                    <li><b>• EW:</b> ${quant.ewDesc}</li>
-                                    <li><b>• Fib:</b> ${quant.fibCluster}</li>
-                                    <li><b>• RSI & Vol:</b> RSI: ${quant.rsi} (${quant.rsiStatus}) | Vol: ${quant.volStatus}</li>
-                                    <li><b>• CRV & Trigger:</b> <b>CRV: ${quant.crv}</b> | Trigger: Outperformance über $${quant.triggerPrice}</li>
+                                    <li><b>• Elliott Wave <span class="info-icon" title="Das Wellen-Muster signalisiert, in welchem Abschnitt des Trends sich das Asset befindet.">?</span>:</b> ${quant.ewDesc}</li>
+                                    <li><b>• Fibonacci <span class="info-icon" title="Preis-Zonen, die historisch oft als Wendepunkte dienen.">?</span>:</b> ${quant.fibCluster}</li>
+                                    <li><b>• RSI & Volatilität <span class="info-icon" title="RSI misst Kaufstärke (25-40=Günstig, >65=Heiß). Volatilität misst Schwankungsintensität.">?</span>:</b> RSI: ${quant.rsi} (${quant.rsiStatus}) | Vola: ${quant.volStatus}</li>
+                                    <li><b>• CRV & Trigger <span class="info-icon" title="CRV = Chance-Risiko-Verhältnis. Trigger = Preis für ein Bestätigungs-Signal.">?</span>:</b> <b>CRV: ${quant.crv}</b> | Trigger: $${quant.triggerPrice}</li>
                                 </ul>
                             </div>
                         </div>
 
                         <div class="card-footer">
-                            <span style="font-size:0.65rem; color:var(--text-muted);">Macro: Risk-On | System Validated</span>
-                            <span class="badge ${quant.bClass}">${quant.badge}</span>
+                            <span style="font-size:0.65rem; color:var(--text-muted);" title="Status der On-Chain & Systemprüfungen">System Verified</span>
+                            <span class="badge ${quant.bClass}">${quant.badge} (${quant.horizon})</span>
                         </div>
                     </div>
                 `;
@@ -268,16 +313,16 @@
 
             const ewPhase = isUp ? (change > 3 ? 'Welle 3 Impuls' : 'Welle (4) Korrektur') : 'Welle C ABC-ZigZag';
             const ewDesc = isUp 
-                ? `Akkumulation im primären Impulsbein (${ewPhase})` 
-                : `Komplexe Konsolidierung / Bodenbildung im C-Bein`;
+                ? `Akkumulation im Aufwärtstrend (${ewPhase})` 
+                : `Bodenbildungsphase im Bärenmarkt-C-Bein`;
 
             const fib0382 = (price * (isUp ? 0.94 : 0.88)).toFixed(0);
             const fib0618 = (price * (isUp ? 0.88 : 0.80)).toFixed(0);
             const fibCluster = `0.382 Fib: $${fib0382} | 0.618 Support: $${fib0618}`;
 
             const rsi = Math.min(Math.max(Math.round(50 + change * 1.8), 25), 85);
-            const rsiStatus = rsi > 65 ? 'Stark / Überkauft' : rsi < 40 ? 'Unterverkauft' : 'Neutral';
-            const volStatus = Math.abs(change) > 2 ? 'Erhöht' : 'Stabil';
+            const rsiStatus = rsi > 65 ? 'Stark' : rsi < 40 ? 'Günstig' : 'Neutral';
+            const volStatus = Math.abs(change) > 2 ? 'Hoch' : 'Ruhig';
 
             const crv = (Math.abs(change) * 0.4 + 2.8).toFixed(1);
             const triggerPrice = (price * (isUp ? 1.06 : 1.12)).toFixed(0);
@@ -287,9 +332,12 @@
             const target2J = (price * (isUp ? 1.65 : 1.35)).toFixed(0);
             const target3J = (price * (isUp ? 2.10 : 1.60)).toFixed(0);
 
+            // Expliziter Zeithorizont für das Sentiment
+            const horizon = isUp ? 'Mittelfristig 3-6M' : 'Kurzfristig 1-4W';
+
             return {
                 ewPhase, ewDesc, fibCluster, rsi, rsiStatus, volStatus, crv, triggerPrice,
-                support, target1J, target2J, target3J,
+                support, target1J, target2J, target3J, horizon,
                 badge: isUp ? 'BULLISCH' : 'BEARISH',
                 bClass: isUp ? 'badge-bullish' : 'badge-bearish',
                 trendDirection: isUp
@@ -315,9 +363,17 @@
                 const chartEl = document.getElementById(`chart-${symbol}`);
                 if (!chartEl) return;
 
+                const isDark = currentTheme === 'dark';
+
                 const chart = LightweightCharts.createChart(chartEl, {
-                    layout: { backgroundColor: '#ffffff', textColor: '#5a6a7b' },
-                    grid: { vertLines: { color: '#f0f4f8' }, horzLines: { color: '#f0f4f8' } },
+                    layout: { 
+                        backgroundColor: isDark ? '#151a23' : '#ffffff', 
+                        textColor: isDark ? '#848e9c' : '#5a6a7b' 
+                    },
+                    grid: { 
+                        vertLines: { color: isDark ? '#262d3d' : '#f0f4f8' }, 
+                        horzLines: { color: isDark ? '#262d3d' : '#f0f4f8' } 
+                    },
                     timeScale: { visible: false }, rightPriceScale: { borderVisible: false }
                 });
 
@@ -355,14 +411,13 @@
         async function validateAndAddAsset() {
             const symbol = document.getElementById('input-ticker').value.toUpperCase().trim();
             const msgEl = document.getElementById('validation-msg');
-            msgEl.innerText = 'Prüfe Symbol & generiere Quant-Modell...';
+            msgEl.innerText = 'Prüfe Symbol & erstelle Quant-Modell...';
             msgEl.style.color = 'var(--accent-steel)';
 
             if(!symbol) return;
 
             try {
                 const res = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`);
-                const isBinance = res.ok;
                 
                 const newAsset = { 
                     symbol: symbol, 
@@ -371,7 +426,7 @@
                 };
                 
                 myAssets.push(newAsset);
-                localStorage.setItem('quant_assets_v3', JSON.stringify(myAssets));
+                localStorage.setItem('quant_assets_v4', JSON.stringify(myAssets));
                 
                 selectedSymbols.push(symbol);
                 populatePicker();
@@ -386,7 +441,7 @@
         function deleteAsset(symbol) {
             myAssets = myAssets.filter(a => a.symbol !== symbol);
             selectedSymbols = selectedSymbols.filter(s => s !== symbol);
-            localStorage.setItem('quant_assets_v3', JSON.stringify(myAssets));
+            localStorage.setItem('quant_assets_v4', JSON.stringify(myAssets));
             populatePicker();
             updateSelectedView();
         }
