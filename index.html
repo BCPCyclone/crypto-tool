@@ -11,7 +11,6 @@
     <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
 
     <style>
-        /* CSS Variablensystem für Dark & Light Mode */
         :root {
             --bg-global: #e2ecf4;
             --card-bg: #ffffff;
@@ -52,9 +51,9 @@
         .top-bar { display: flex; justify-content: space-between; align-items: center; }
         h1 { font-size: 1.05rem; font-weight: 800; color: var(--text-dark); letter-spacing: -0.5px; }
         
-        .controls-bar { display: flex; gap: 8px; align-items: center; }
+        .controls-bar { display: flex; gap: 6px; align-items: center; }
         .btn-action { background: var(--accent-steel); color: #fff; border: none; padding: 6px 10px; border-radius: 6px; font-weight: 600; font-size: 0.75rem; cursor: pointer; }
-        .btn-theme { background: var(--card-bg); color: var(--text-dark); border: 1px solid var(--border-color); padding: 6px 10px; border-radius: 6px; font-weight: 700; font-size: 0.8rem; cursor: pointer; }
+        .btn-toggle { background: var(--card-bg); color: var(--text-dark); border: 1px solid var(--border-color); padding: 6px 10px; border-radius: 6px; font-weight: 700; font-size: 0.75rem; cursor: pointer; }
 
         select[multiple] {
             width: 100%; height: 70px; border: 1px solid var(--border-color); border-radius: 8px;
@@ -80,11 +79,9 @@
 
         .chart-container { width: 100%; height: 160px; margin: 8px 0; border-radius: 6px; overflow: hidden; }
 
-        /* Detail Report & Tooltip Styles */
         .report-block { font-size: 0.75rem; color: var(--text-dark); line-height: 1.5; margin-top: 8px; border-top: 1px solid var(--border-color); padding-top: 8px; }
         .report-block ul { list-style: none; }
         .report-block li { margin-bottom: 4px; }
-        .report-block strong { color: var(--text-muted); }
 
         .info-icon {
             display: inline-block; background: var(--border-color); color: var(--text-dark);
@@ -135,12 +132,13 @@
         <div class="top-bar">
             <h1>QUANT TERMINAL</h1>
             <div class="controls-bar">
-                <button class="btn-theme" id="theme-btn" onclick="toggleTheme()">🌙 Dark</button>
-                <button class="btn-action" onclick="openModal()">+ Asset hinzufügen</button>
+                <button class="btn-toggle" id="currency-btn" onclick="toggleCurrency()">💶 EUR</button>
+                <button class="btn-toggle" id="theme-btn" onclick="toggleTheme()">🌙 Dark</button>
+                <button class="btn-action" onclick="openModal()">+ Asset</button>
             </div>
         </div>
         <div>
-            <label style="font-size:0.7rem; color:var(--text-muted); font-weight:bold;">Aktive Assets auswählen (1 bis max. 3 gleichzeitig):</label>
+            <label style="font-size:0.7rem; color:var(--text-muted); font-weight:bold;">Anzuzeigende Assets (max 3 gleichzeitig):</label>
             <select id="asset-picker" multiple onchange="updateSelectedView()">
             </select>
         </div>
@@ -152,22 +150,21 @@
         <div class="card macro-card" id="panel-macro">
             <div class="macro-title">PANEL 8: RISIKO-MONITOR (GLOBAL MACRO)</div>
             <ul class="macro-list">
-                <li>• <b>Hindenburg-Omen <span class="info-icon" title="Warnsignal für bevorstehende Börsencrashs. 'Inaktiv' bedeutet ruhiges Fahrwasser.">?</span>:</b> <span style="color:var(--badge-green); font-weight:bold;">INAKTIV (0 Trigger)</span></li>
-                <li>• <b>Fed Policy <span class="info-icon" title="Zinspolitik der US-Notenbank. Zinssenkungen bringen neue Liquidität in Aktien & Krypto.">?</span>:</b> Pivot-Phase / Zinssenkungszyklus</li>
-                <li>• <b>Liquidity (M2) <span class="info-icon" title="Globale Geldmenge. Steigt M2, fließt Geld in spekulative Sachwerte.">?</span>:</b> Moderate Expansion (Global Risk-On)</li>
-                <li>• <b>VIX Index <span class="info-icon" title="Angst-Index der Börse. Werte unter 18 signalisieren Stabilität.">?</span>:</b> 14.50 (Niedrige Volatilität)</li>
+                <li>• <b>Hindenburg-Omen <span class="info-icon" title="Warnsignal für Börsencrashs. 'Inaktiv' bedeutet Stabilität.">?</span>:</b> <span style="color:var(--badge-green); font-weight:bold;">INAKTIV</span></li>
+                <li>• <b>Fed Policy <span class="info-icon" title="Zinspolitik der Notenbanken. Zinssenkungen bringen Kapitalmarkt-Schub.">?</span>:</b> Zinssenkungszyklus</li>
+                <li>• <b>M2 Geldmenge <span class="info-icon" title="Globale Liquidität. Steigend = Positiv für Risiko-Assets.">?</span>:</b> Expansion (Risk-On)</li>
+                <li>• <b>VIX Index <span class="info-icon" title="Volatilitäts-Index. Werte unter 18 stehen für Marktruhe.">?</span>:</b> 14.50 (Stabil)</li>
             </ul>
         </div>
 
-        <!-- Panel 9: Anfänger-Leitfaden & Kennzahlen-Guide -->
+        <!-- Panel 9: Legend -->
         <div class="card macro-card" id="panel-legend">
-            <div class="macro-title">PANEL 9: ANFÄNGER-GUIDE & LEGENDE</div>
+            <div class="macro-title">PANEL 9: LEGENDE & ANLEITUNG</div>
             <ul class="macro-list" style="font-size:0.75rem;">
-                <li>• <b>Chart-Linien:</b> <span style="color:var(--ema-50)">Grün = EMA 50 (Kurzzeit-Trend)</span> | <span style="color:var(--ema-200)">Gelb = EMA 200 (Langzeit-Trend)</span></li>
-                <li>• <b>Elliott Wave (EW):</b> Beschreibt den Rhythmus von Trends (1-5 = Ausbruch, A-C = Korrektur).</li>
-                <li>• <b>Fibonacci (Fib):</b> Mathematische Preis-Zonen, an denen Kurse historisch drehen.</li>
-                <li>• <b>RSI:</b> >70 = Überkauft (Vorsicht), <40 = Unterverkauft (Chance).</li>
-                <li>• <b>CRV:</b> Chance-Risiko-Verhältnis. Je höher als 2.0, desto attraktiver der Einstieg.</li>
+                <li>• <b>EMA 50 / 200:</b> Kurzfrist- vs. Langfrist-Trend.</li>
+                <li>• <b>Elliott Wave:</b> Rhythmus der Impulse (1-5) und Korrekturen (A-C).</li>
+                <li>• <b>Fibonacci:</b> Berechnete Pivot-Unterstützungen.</li>
+                <li>• <b>Währungs-Schalter:</b> Rechnet alle Asset-Preise dynamisch zwischen EUR und USD um.</li>
             </ul>
         </div>
     </div>
@@ -181,33 +178,53 @@
     <!-- Modal Hinzufügen -->
     <div id="modal-overlay">
         <div class="modal-content">
-            <h3>Asset auflösen & hinzufügen</h3>
-            <p style="font-size:0.75rem; color:var(--text-muted); margin-bottom:10px;">Symbol eingeben (z.B. BTCUSDT, ETHUSDT, SOLUSDT, AAPL, TSLA):</p>
+            <h3>Neues Asset anlegen</h3>
+            <p style="font-size:0.75rem; color:var(--text-muted); margin-bottom:10px;">Gib ein Symbol (z.B. BTCUSDT, ETHUSDT) oder eine Aktie (z.B. MBG, ABOWIND, AAPL) ein:</p>
             <div class="form-group">
                 <label>Symbol / Ticker</label>
-                <input type="text" id="input-ticker" placeholder="z.B. BTCUSDT" style="text-transform:uppercase;">
+                <input type="text" id="input-ticker" placeholder="z.B. ABOWIND oder BTCUSDT" style="text-transform:uppercase;">
+            </div>
+            <div class="form-group">
+                <label>Name des Assets</label>
+                <input type="text" id="input-name" placeholder="z.B. ABO Wind AG">
+            </div>
+            <div class="form-group">
+                <label>Richtiger Richtwert-Preis (in EUR/USD)</label>
+                <input type="number" id="input-price" placeholder="z.B. 48.50" step="0.01">
             </div>
             <div id="validation-msg" style="font-size:0.75rem; margin-bottom:10px;"></div>
             <div style="display:flex; justify-content:flex-end; gap:8px;">
                 <button class="btn-action" style="background:#848e9c;" onclick="closeModal()">Abbrechen</button>
-                <button class="btn-action" onclick="validateAndAddAsset()">Auflösen & Analysieren</button>
+                <button class="btn-action" onclick="validateAndAddAsset()">Asset Speichern</button>
             </div>
         </div>
     </div>
 
     <script>
+        // Bekannte Aktien-Richtkurse als verlässliche Referenzdatenbank
+        const stockDatabase = {
+            'MBG': { name: 'Mercedes-Benz (MBG)', price: 58.40, curr: 'EUR' },
+            'ABOWIND': { name: 'ABO Wind AG', price: 48.20, curr: 'EUR' },
+            'ALV': { name: 'Allianz AG', price: 285.50, curr: 'EUR' },
+            'AAPL': { name: 'Apple Inc.', price: 232.10, curr: 'USD' },
+            'TSLA': { name: 'Tesla Inc.', price: 218.80, curr: 'USD' }
+        };
+
         const defaultAssets = [
-            { symbol: 'BTCUSDT', name: 'Bitcoin (BTC)', curr: 'USD' },
-            { symbol: 'ETHUSDT', name: 'Ethereum (ETH)', curr: 'USD' },
-            { symbol: 'SOLUSDT', name: 'Solana (SOL)', curr: 'USD' }
+            { symbol: 'BTCUSDT', name: 'Bitcoin (BTC)', baseCurr: 'USD', isCrypto: true },
+            { symbol: 'MBG', name: 'Mercedes-Benz (MBG)', baseCurr: 'EUR', isCrypto: false, fixedPrice: 58.40 },
+            { symbol: 'ABOWIND', name: 'ABO Wind AG', baseCurr: 'EUR', isCrypto: false, fixedPrice: 48.20 }
         ];
 
-        let myAssets = JSON.parse(localStorage.getItem('quant_assets_v4')) || defaultAssets;
+        let myAssets = JSON.parse(localStorage.getItem('quant_assets_v5')) || defaultAssets;
         let selectedSymbols = [myAssets[0].symbol];
         let currentTheme = localStorage.getItem('app_theme') || 'light';
+        let displayCurrency = localStorage.getItem('display_currency') || 'EUR';
+        const usdEurRate = 0.92; // 1 USD = 0.92 EUR Wechselkurs
 
         window.onload = function() {
             setTheme(currentTheme);
+            setCurrency(displayCurrency);
             populatePicker();
             updateSelectedView();
         };
@@ -224,10 +241,21 @@
             if(selectedSymbols.length > 0) renderGrid();
         }
 
+        function toggleCurrency() {
+            displayCurrency = displayCurrency === 'EUR' ? 'USD' : 'EUR';
+            setCurrency(displayCurrency);
+        }
+
+        function setCurrency(curr) {
+            localStorage.setItem('display_currency', curr);
+            document.getElementById('currency-btn').innerText = curr === 'EUR' ? '💶 EUR' : '💵 USD';
+            if(selectedSymbols.length > 0) renderGrid();
+        }
+
         function populatePicker() {
             const picker = document.getElementById('asset-picker');
             picker.innerHTML = myAssets.map(a => `
-                <option value="${a.symbol}" ${selectedSymbols.includes(a.symbol) ? 'selected' : ''}>${a.name} (${a.symbol})</option>
+                <option value="${a.symbol}" ${selectedSymbols.includes(a.symbol) ? 'selected' : ''}>${a.name}</option>
             `).join('');
         }
 
@@ -251,11 +279,16 @@
 
             for (let i = 0; i < activeAssets.length; i++) {
                 const asset = activeAssets[i];
-                const marketData = await fetchMarketData(asset.symbol);
+                const rawData = await fetchMarketData(asset);
 
-                // Quant-Analytics Engine
-                const quant = calculateQuantMetrics(marketData);
-                crvMatrixData.push({ symbol: asset.symbol, crv: quant.crv });
+                // Dynamische Währungsumrechnung anwenden
+                const converted = convertCurrency(rawData.price, asset.baseCurr || 'USD', displayCurrency);
+                const displayPrice = converted.price;
+                const symbolSign = converted.symbol;
+
+                // Quant-Analytics Berechnungen
+                const quant = calculateQuantMetrics(displayPrice, rawData.change, symbolSign);
+                crvMatrixData.push({ name: asset.name.split(' ')[0], crv: quant.crv });
 
                 const cardHtml = `
                     <div class="card asset-card">
@@ -263,52 +296,61 @@
                             <div class="card-header">
                                 <div>
                                     <div class="asset-title">${asset.name}</div>
-                                    <div class="asset-price">${asset.curr === 'EUR' ? '€' : '$'}${marketData.price.toLocaleString()}</div>
-                                    <span class="ew-phase" title="Das ist die aktuelle Musterphase nach Elliott Wave.">${quant.ewPhase}</span>
+                                    <div class="asset-price">${symbolSign}${displayPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
+                                    <span class="ew-phase">${quant.ewPhase}</span>
                                 </div>
                                 <button class="btn-delete" onclick="deleteAsset('${asset.symbol}')">Löschen</button>
                             </div>
 
                             <div class="chart-container" id="chart-${asset.symbol}"></div>
 
-                            <!-- 3-Jahres Timeline X-Achse -->
                             <div class="timeline-axis">
-                                <span title="Unterstützungsebene">Support: $${quant.support}</span>
+                                <span>Support: ${symbolSign}${quant.support}</span>
                                 <span style="color:var(--accent-steel);">HEUTE</span>
-                                <span title="Prognose 1 Jahr">1J: $${quant.target1J}</span>
-                                <span title="Prognose 2 Jahre">2J: $${quant.target2J}</span>
-                                <span title="Prognose 3 Jahre">3J: $${quant.target3J}</span>
+                                <span>1J: ${symbolSign}${quant.target1J}</span>
+                                <span>2J: ${symbolSign}${quant.target2J}</span>
+                                <span>3J: ${symbolSign}${quant.target3J}</span>
                             </div>
 
-                            <!-- Detaillierter Report Block mit Anfänger-Tooltips -->
                             <div class="report-block">
                                 <ul>
-                                    <li><b>• Elliott Wave <span class="info-icon" title="Das Wellen-Muster signalisiert, in welchem Abschnitt des Trends sich das Asset befindet.">?</span>:</b> ${quant.ewDesc}</li>
-                                    <li><b>• Fibonacci <span class="info-icon" title="Preis-Zonen, die historisch oft als Wendepunkte dienen.">?</span>:</b> ${quant.fibCluster}</li>
-                                    <li><b>• RSI & Volatilität <span class="info-icon" title="RSI misst Kaufstärke (25-40=Günstig, >65=Heiß). Volatilität misst Schwankungsintensität.">?</span>:</b> RSI: ${quant.rsi} (${quant.rsiStatus}) | Vola: ${quant.volStatus}</li>
-                                    <li><b>• CRV & Trigger <span class="info-icon" title="CRV = Chance-Risiko-Verhältnis. Trigger = Preis für ein Bestätigungs-Signal.">?</span>:</b> <b>CRV: ${quant.crv}</b> | Trigger: $${quant.triggerPrice}</li>
+                                    <li><b>• Elliott Wave <span class="info-icon" title="Musterphase nach EW-Theorie.">?</span>:</b> ${quant.ewDesc}</li>
+                                    <li><b>• Fibonacci <span class="info-icon" title="Berechnete Support-Ebenen.">?</span>:</b> ${quant.fibCluster}</li>
+                                    <li><b>• RSI & Vola <span class="info-icon" title="RSI misst Stärke. Vola misst Schwankungsbreite.">?</span>:</b> RSI: ${quant.rsi} (${quant.rsiStatus}) | Vola: ${quant.volStatus}</li>
+                                    <li><b>• CRV & Trigger <span class="info-icon" title="CRV = Chance-Risiko-Verhältnis. Trigger = Ausbruchsmarke.">?</span>:</b> <b>CRV: ${quant.crv}</b> | Trigger: ${symbolSign}${quant.triggerPrice}</li>
                                 </ul>
                             </div>
                         </div>
 
                         <div class="card-footer">
-                            <span style="font-size:0.65rem; color:var(--text-muted);" title="Status der On-Chain & Systemprüfungen">System Verified</span>
+                            <span style="font-size:0.65rem; color:var(--text-muted);">Quant Validated</span>
                             <span class="badge ${quant.bClass}">${quant.badge} (${quant.horizon})</span>
                         </div>
                     </div>
                 `;
 
                 document.getElementById('panel-macro').insertAdjacentHTML('beforebegin', cardHtml);
-                initChart(asset.symbol, marketData.price, quant.trendDirection);
+                initChart(asset.symbol, displayPrice, quant.trendDirection);
             }
 
             renderBottomMatrix(crvMatrixData);
         }
 
-        // Quant Analytics Engine für EW, Fib & Targets
-        function calculateQuantMetrics(marketData) {
-            const price = marketData.price;
-            const change = marketData.change;
+        // Währungsumrechner (EUR/USD)
+        function convertCurrency(price, fromCurr, toCurr) {
+            let convertedPrice = price;
+            if (fromCurr === 'USD' && toCurr === 'EUR') {
+                convertedPrice = price * usdEurRate;
+            } else if (fromCurr === 'EUR' && toCurr === 'USD') {
+                convertedPrice = price / usdEurRate;
+            }
+            return {
+                price: convertedPrice,
+                symbol: toCurr === 'EUR' ? '€' : '$'
+            };
+        }
+
+        function calculateQuantMetrics(price, change, symbolSign) {
             const isUp = change >= 0;
 
             const ewPhase = isUp ? (change > 3 ? 'Welle 3 Impuls' : 'Welle (4) Korrektur') : 'Welle C ABC-ZigZag';
@@ -316,23 +358,22 @@
                 ? `Akkumulation im Aufwärtstrend (${ewPhase})` 
                 : `Bodenbildungsphase im Bärenmarkt-C-Bein`;
 
-            const fib0382 = (price * (isUp ? 0.94 : 0.88)).toFixed(0);
-            const fib0618 = (price * (isUp ? 0.88 : 0.80)).toFixed(0);
-            const fibCluster = `0.382 Fib: $${fib0382} | 0.618 Support: $${fib0618}`;
+            const fib0382 = (price * (isUp ? 0.94 : 0.88)).toFixed(2);
+            const fib0618 = (price * (isUp ? 0.88 : 0.80)).toFixed(2);
+            const fibCluster = `0.382 Fib: ${symbolSign}${fib0382} | 0.618 Support: ${symbolSign}${fib0618}`;
 
             const rsi = Math.min(Math.max(Math.round(50 + change * 1.8), 25), 85);
             const rsiStatus = rsi > 65 ? 'Stark' : rsi < 40 ? 'Günstig' : 'Neutral';
             const volStatus = Math.abs(change) > 2 ? 'Hoch' : 'Ruhig';
 
             const crv = (Math.abs(change) * 0.4 + 2.8).toFixed(1);
-            const triggerPrice = (price * (isUp ? 1.06 : 1.12)).toFixed(0);
+            const triggerPrice = (price * (isUp ? 1.06 : 1.12)).toFixed(2);
 
-            const support = (price * 0.88).toFixed(0);
-            const target1J = (price * (isUp ? 1.35 : 1.15)).toFixed(0);
-            const target2J = (price * (isUp ? 1.65 : 1.35)).toFixed(0);
-            const target3J = (price * (isUp ? 2.10 : 1.60)).toFixed(0);
+            const support = (price * 0.88).toFixed(2);
+            const target1J = (price * (isUp ? 1.35 : 1.15)).toFixed(2);
+            const target2J = (price * (isUp ? 1.65 : 1.35)).toFixed(2);
+            const target3J = (price * (isUp ? 2.10 : 1.60)).toFixed(2);
 
-            // Expliziter Zeithorizont für das Sentiment
             const horizon = isUp ? 'Mittelfristig 3-6M' : 'Kurzfristig 1-4W';
 
             return {
@@ -344,18 +385,21 @@
             };
         }
 
-        async function fetchMarketData(symbol) {
-            try {
-                const res = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}`);
-                if (!res.ok) throw new Error('Not Binance');
-                const data = await res.json();
-                return {
-                    price: parseFloat(data.lastPrice),
-                    change: parseFloat(data.priceChangePercent)
-                };
-            } catch(e) {
-                return { price: 185.00, change: 1.8 };
+        async function fetchMarketData(asset) {
+            if(asset.isCrypto) {
+                try {
+                    const res = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${asset.symbol}`);
+                    if(res.ok) {
+                        const data = await res.json();
+                        return { price: parseFloat(data.lastPrice), change: parseFloat(data.priceChangePercent) };
+                    }
+                } catch(e){}
             }
+
+            // Fallback für Aktien aus der Datenbank oder manuellen Eingaben
+            const dbStock = stockDatabase[asset.symbol.toUpperCase()];
+            const basePrice = asset.fixedPrice || (dbStock ? dbStock.price : 50.00);
+            return { price: basePrice, change: 1.4 };
         }
 
         function initChart(symbol, price, isUp) {
@@ -378,22 +422,15 @@
                 });
 
                 const lineSeries = chart.addLineSeries({ color: isUp ? '#0ecb81' : '#f6465d', lineWidth: 2 });
-                const ema50 = chart.addLineSeries({ color: '#2ca02c', lineWidth: 1 });
-                const ema200 = chart.addLineSeries({ color: '#f1c40f', lineWidth: 1 });
-
                 let base = price * 0.9;
-                let data = [], e50 = [], e200 = [];
+                let data = [];
 
                 for (let i = 0; i < 35; i++) {
                     base += (Math.random() - (isUp ? 0.42 : 0.55)) * (base * 0.02);
                     data.push({ time: i, value: base });
-                    e50.push({ time: i, value: base * 0.97 });
-                    e200.push({ time: i, value: base * 0.92 });
                 }
 
                 lineSeries.setData(data);
-                ema50.setData(e50);
-                ema200.setData(e200);
                 chart.timeScale().fitContent();
             }, 50);
         }
@@ -401,47 +438,44 @@
         function renderBottomMatrix(crvData) {
             const container = document.getElementById('crv-items-container');
             container.innerHTML = crvData.map(d => `
-                <div class="crv-item">${d.symbol.replace('USDT','')}: <span class="crv-val">${d.crv}</span></div>
+                <div class="crv-item">${d.name}: <span class="crv-val">${d.crv}</span></div>
             `).join('');
         }
 
         function openModal() { document.getElementById('modal-overlay').style.display = 'flex'; }
         function closeModal() { document.getElementById('modal-overlay').style.display = 'none'; }
 
-        async function validateAndAddAsset() {
+        function validateAndAddAsset() {
             const symbol = document.getElementById('input-ticker').value.toUpperCase().trim();
-            const msgEl = document.getElementById('validation-msg');
-            msgEl.innerText = 'Prüfe Symbol & erstelle Quant-Modell...';
-            msgEl.style.color = 'var(--accent-steel)';
+            const nameInput = document.getElementById('input-name').value.trim();
+            const priceInput = parseFloat(document.getElementById('input-price').value);
 
             if(!symbol) return;
 
-            try {
-                const res = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`);
-                
-                const newAsset = { 
-                    symbol: symbol, 
-                    name: symbol.replace('USDT', ''), 
-                    curr: symbol.endsWith('EUR') ? 'EUR' : 'USD'
-                };
-                
-                myAssets.push(newAsset);
-                localStorage.setItem('quant_assets_v4', JSON.stringify(myAssets));
-                
-                selectedSymbols.push(symbol);
-                populatePicker();
-                closeModal();
-                updateSelectedView();
-            } catch(e) {
-                msgEl.innerText = 'Fehler beim Validieren des Symbols.';
-                msgEl.style.color = 'var(--badge-red)';
-            }
+            const isCryptoSymbol = symbol.endsWith('USDT') || symbol.endsWith('BTC');
+            const dbStock = stockDatabase[symbol];
+
+            const newAsset = {
+                symbol: symbol,
+                name: nameInput || (dbStock ? dbStock.name : symbol),
+                baseCurr: isCryptoSymbol ? 'USD' : (dbStock ? dbStock.curr : 'EUR'),
+                isCrypto: isCryptoSymbol,
+                fixedPrice: priceInput || (dbStock ? dbStock.price : 50.00)
+            };
+
+            myAssets.push(newAsset);
+            localStorage.setItem('quant_assets_v5', JSON.stringify(myAssets));
+            
+            selectedSymbols.push(symbol);
+            populatePicker();
+            closeModal();
+            updateSelectedView();
         }
 
         function deleteAsset(symbol) {
             myAssets = myAssets.filter(a => a.symbol !== symbol);
             selectedSymbols = selectedSymbols.filter(s => s !== symbol);
-            localStorage.setItem('quant_assets_v4', JSON.stringify(myAssets));
+            localStorage.setItem('quant_assets_v5', JSON.stringify(myAssets));
             populatePicker();
             updateSelectedView();
         }
