@@ -81,9 +81,10 @@ table{border-collapse:collapse;font-size:.75rem;width:100%}td,th{padding:4px 6px
 <div class="ban" id="ban">CRV:</div>
 
 <div class="mo" id="m-add"><div class="mc"><h3>Asset hinzufügen</h3>
-  <div class="fg"><label>Ticker (Krypto: BTCUSDT · Aktie: AAPL oder MBG:XETR)</label><input id="a-t" autocapitalize="characters"></div>
-  <div class="fg"><label>Name (optional)</label><input id="a-n"></div>
-  <div class="fg"><label>Handelswährung (Aktien)</label><select id="a-c"><option>EUR</option><option>USD</option></select></div>
+  <div class="fg"><label>Suche: Kürzel oder Name (z. B. BTC, ETH, ALV, Allianz, AAPL)</label><input id="a-t" autocapitalize="characters"></div>
+  <div class="fg"><label>Anzeigename (optional)</label><input id="a-n"></div>
+  <div class="mu" style="margin-bottom:8px">Krypto wird automatisch bei Binance gefunden. Aktien brauchen den Twelve-Data-Key (⚙) und zeigen eine Trefferliste zur Auswahl.</div>
+  <div id="a-r"></div>
   <div id="a-e" class="err" style="padding:0 0 8px"></div>
   <div class="row" style="justify-content:flex-end"><button data-close>Abbrechen</button><button class="pri" id="a-ok">Prüfen &amp; speichern</button></div></div></div>
 
@@ -141,7 +142,7 @@ async function candles(a,iv){
   }else{
     if(!cfg.key)throw new Error('Twelve-Data-Key fehlt (⚙ Einstellungen)');
     const m={'1h':'1h','4h':'4h','1d':'1day','1w':'1week'},[s,ex]=a.symbol.split(':');
-    const j=await getJSON(`https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(s)}${ex?'&exchange='+encodeURIComponent(ex):''}&interval=${m[iv]}&outputsize=500&apikey=${encodeURIComponent(cfg.key)}`);
+    const j=await getJSON(`https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(s)}${ex?'&mic_code='+encodeURIComponent(ex):''}&interval=${m[iv]}&outputsize=500&apikey=${encodeURIComponent(cfg.key)}`);
     if(j.status==='error'||!j.values)throw new Error(j.message||'Keine Daten für dieses Symbol');
     d=j.values.slice().reverse().map(v=>{let s=v.datetime;if(s.length===10)s+=' 00:00:00';return{time:Math.floor(Date.parse(s.replace(' ','T')+'Z')/1000),open:+v.open,high:+v.high,low:+v.low,close:+v.close,vol:+(v.volume||0)}});
   }
@@ -317,6 +318,7 @@ document.addEventListener('click',e=>{
   if(act==='chip'){sel=sel.includes(s)?sel.filter(x=>x!==s):[...sel,s].slice(-3);LS.set('qt7_sel',sel);render()}
   if(act==='tf'){tf=s;LS.set('qt7_tf',tf);render()}
   if(act==='del'&&confirm('Asset wirklich löschen?')){assets=assets.filter(a=>a.symbol!==s);sel=sel.filter(x=>x!==s);LS.set('qt7_assets',assets);LS.set('qt7_sel',sel);render()}
+  if(act==='pick')pick(+t.dataset.i);
   if(act==='reset'){delete setups[s];LS.set('qt7_setups',setups);render()}
   if(act==='alert'){const a=assets.find(x=>x.symbol===s),p=parseFloat((prompt(`Preisalarm für ${a.name} in ${cur} (Zahl):`)||'').replace(',','.'));
     if(p>0){const f=factor(a),raw=p/f,c=cache.get(s+'|'+tf)?.d,lp=c?c[c.length-1].close:raw;
@@ -335,15 +337,38 @@ $('#b-ref').onclick=()=>{cache.clear();loadFx().then(()=>{render();loadMacro()})
 $('#b-add').onclick=()=>{$('#a-e').textContent='';open('#m-add')};
 $('#b-set').onclick=()=>{$('#s-k').value=cfg.key;$('#s-cap').value=cfg.capital;$('#s-r').value=cfg.risk;open('#m-set')};
 $('#s-ok').onclick=()=>{cfg={key:$('#s-k').value.trim(),capital:Math.max(0,+$('#s-cap').value||0),risk:Math.max(.1,+$('#s-r').value||1)};LS.set('qt7_cfg',cfg);cache.clear();close();render()};
+let found=[];
+const aErr=m=>$('#a-e').textContent=m;
+async function addAsset(a){
+  aErr('Prüfe Daten …');
+  try{await candles(a,'1d')}catch(e){aErr('Keine Daten: '+e.message);return}
+  assets.push(a);sel=[...sel,a.symbol].slice(-3);LS.set('qt7_assets',assets);LS.set('qt7_sel',sel);
+  $('#a-t').value=$('#a-n').value='';$('#a-r').innerHTML='';aErr('');close();render();
+}
+function pick(i){const x=found[i];if(!x)return;
+  const sy=x.symbol+':'+(x.mic_code||x.exchange);
+  if(assets.some(a=>a.symbol===sy)){aErr('Asset existiert bereits.');return}
+  addAsset({symbol:sy,name:($('#a-n').value.trim()||x.instrument_name||x.symbol).slice(0,30),crypto:false,curr:x.currency});
+}
 $('#a-ok').onclick=async()=>{
-  const sy=$('#a-t').value.toUpperCase().replace(/[^A-Z0-9:._-]/g,'');if(!sy)return;
-  if(assets.some(a=>a.symbol===sy)){$('#a-e').textContent='Asset existiert bereits.';return}
-  const crypto=/(USDT|USDC|BUSD)$/.test(sy);
-  const a={symbol:sy,name:$('#a-n').value.trim().slice(0,30)||sy.split(':')[0],crypto,curr:crypto?'USD':$('#a-c').value};
-  $('#a-e').textContent='Prüfe Symbol …';
-  try{await candles(a,'1d')}catch(e){$('#a-e').textContent='Symbol nicht gefunden oder keine Daten: '+e.message;return}
-  assets.push(a);sel=[...sel,sy].slice(-3);LS.set('qt7_assets',assets);LS.set('qt7_sel',sel);
-  $('#a-t').value=$('#a-n').value='';close();render();
+  const raw=$('#a-t').value.toUpperCase().replace(/[^A-Z0-9:._ -]/g,'').trim();if(!raw)return;
+  $('#a-r').innerHTML='';aErr('Suche …');
+  const nm=$('#a-n').value.trim().slice(0,30),base=raw.replace(/(USDT|USDC|BUSD)$/,'');
+  if(/^[A-Z0-9]{2,12}$/.test(base)){
+    const a={symbol:base+'USDT',name:nm||base,crypto:true,curr:'USD'};
+    if(assets.some(x=>x.symbol===a.symbol)){aErr('Asset existiert bereits.');return}
+    let ok=false;try{await candles(a,'1d');ok=true}catch(e){}
+    if(ok)return addAsset(a);
+  }
+  if(!cfg.key){aErr('Nicht als Krypto bei Binance gefunden. Für Aktien bitte zuerst den Twelve-Data-Key unter ⚙ eintragen.');return}
+  if(raw.includes(':')){const [s]=raw.split(':');return addAsset({symbol:raw,name:nm||s,crypto:false,curr:'EUR'})}
+  try{
+    const j=await getJSON(`https://api.twelvedata.com/symbol_search?symbol=${encodeURIComponent(raw)}&outputsize=15&apikey=${encodeURIComponent(cfg.key)}`);
+    if(j.status==='error')throw new Error(j.message);
+    found=(j.data||[]).filter(x=>x.currency==='EUR'||x.currency==='USD');
+    if(!found.length){aErr('Keine Treffer in EUR/USD gefunden.');return}
+    aErr('');$('#a-r').innerHTML='<div class="mu" style="margin-bottom:4px">Treffer, bitte antippen:</div>'+found.map((x,i)=>`<button data-act="pick" data-i="${i}" style="width:100%;text-align:left;margin-bottom:4px">${esc(x.symbol)} · ${esc(x.instrument_name||'')} · ${esc(x.exchange||'')} · ${esc(x.currency)}</button>`).join('');
+  }catch(e){aErr('Suche fehlgeschlagen: '+e.message)}
 };
 document.querySelectorAll('.mo').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)close()}));
 document.addEventListener('keydown',e=>{if(e.key==='Escape')close()});
