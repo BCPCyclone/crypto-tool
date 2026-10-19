@@ -140,7 +140,7 @@ const INFO={
  sr:['Support / Resistance','Nächstes Pivot-Tief unter und Pivot-Hoch über dem Kurs (Fraktal aus je 5 Kerzen links und rechts).'],
  crv:['Chance-Risiko-Verhältnis','Potenzieller Gewinn (Entry bis Ziel) geteilt durch Risiko (Entry bis Stop). CRV 2 heißt: 2 Einheiten Chance je 1 Einheit Risiko. Standardwerte sind ATR-basiert und überschreibbar.'],
  size:['Positionsgröße','Kapital × Risiko % ÷ Stop-Abstand. So verlierst du bei Stop-Treffer genau den eingestellten Prozentsatz deines Kapitals.'],
- scen:['Volatilitätskegel','Aus der historischen Tagesvolatilität (90 Tage) berechneter 1σ-Bereich (ca. 68 % Wahrscheinlichkeit unter Normalverteilung, ohne Drift). Das ist eine Spannweite, keine Kursprognose.'],
+ scen:['Volatilitätskegel','Aus der Tagesvolatilität der letzten bis zu 250 Handelstage berechneter 1σ-Bereich für 1 Monat bis 3 Jahre (ca. 68 % Wahrscheinlichkeit unter Normalverteilung, ohne Trend/Drift). Je länger der Horizont, desto unsicherer, weil sich Volatilität über die Zeit ändert. Das ist eine Spannweite, keine Kursprognose.'],
  corr:['Korrelation','+1 = Assets laufen gleich, 0 = unabhängig, −1 = gegenläufig. Hohe Werte bedeuten Klumpenrisiko.'],
  fng:['Fear & Greed (Krypto)','Index von 0 (extreme Angst) bis 100 (extreme Gier) von alternative.me. Gilt für den Kryptomarkt.'],
  fund:['Funding Rate (BTC Perp)','Gebühr zwischen Long- und Short-Händlern. Stark positiv = viele gehebelte Longs (Überhitzungsrisiko).'],
@@ -234,7 +234,7 @@ function analyze(d){
   return{last,chg:(last/prev-1)*100,e50,e200,rsi:rsi(c),atr:atr(d),hist,regime,cls,arrow,cross,fib,fibUp:up,hi:hi.high,lo:lo.low,sup,res,enough};
 }
 function stats(daily,crypto){
-  const c=daily.map(x=>x.close).slice(-91),r=[];for(let i=1;i<c.length;i++)r.push(Math.log(c[i]/c[i-1]));
+  const c=daily.map(x=>x.close).slice(-251),r=[];for(let i=1;i<c.length;i++)r.push(Math.log(c[i]/c[i-1]));
   const mu=r.reduce((a,b)=>a+b,0)/r.length,sd=Math.sqrt(r.reduce((a,b)=>a+(b-mu)**2,0)/(r.length-1));
   return{sd,ann:sd*Math.sqrt(crypto?365:252)};
 }
@@ -299,9 +299,9 @@ async function render(){
     const d=r.d.map(sc),an=analyze(d),st=setup(a,an,f),s=cur==='EUR'?'€':'$';
     if(r.daily)dailies.push({a,m:retsByDay(r.daily)});
     let scen='<span class="mu">Tagesdaten nicht verfügbar</span>';
-    if(r.daily){const {sd,ann}=stats(r.daily.map(sc),a.crypto);const rg=n=>[an.last*Math.exp(-sd*Math.sqrt(n)),an.last*Math.exp(sd*Math.sqrt(n))];
-      const [a3,b3]=rg(a.crypto?91:63),[a1,b1]=rg(a.crypto?365:252);
-      scen=`3 Mon: ${s}${fmt(a3)} – ${s}${fmt(b3)}<br>1 Jahr: ${s}${fmt(a1)} – ${s}${fmt(b1)}<br><span class="mu">Vola p.a. ${fmt(ann*100,0)} %</span>`}
+    if(r.daily&&r.daily.length>40){const {sd,ann}=stats(r.daily.map(sc),a.crypto);
+      const H=a.crypto?[['1 Mon',30],['6 Mon',182],['1 Jahr',365],['2 Jahre',730],['3 Jahre',1095]]:[['1 Mon',21],['6 Mon',126],['1 Jahr',252],['2 Jahre',504],['3 Jahre',756]];
+      scen=H.map(([l,n])=>`${l}: ${s}${fmt(an.last*Math.exp(-sd*Math.sqrt(n)))} – ${s}${fmt(an.last*Math.exp(sd*Math.sqrt(n)))}`).join('<br>')+`<br><span class="mu">Vola p.a. ${fmt(ann*100,0)} % (${Math.min(250,r.daily.length-1)} Tage Basis)</span>`}
     const last=r.d[r.d.length-1],age=Math.round((Date.now()/1000-last.time)/3600);
     const al=alerts.filter(x=>x.symbol===a.symbol).length;
     const c=st.crv==null?'–':fmt(st.crv,2);
