@@ -73,7 +73,7 @@ table{border-collapse:collapse;font-size:.75rem;width:100%}td,th{padding:4px 6px
       <b>Fakt:</b> Kurse, EMA, RSI, ATR, MACD werden aus den geladenen Kerzen berechnet.<br>
       <b>Signal:</b> EMA-Kreuzungen, Trendregime.<br>
       <b>Szenario:</b> Fibonacci und Volatilitätskegel sind Orientierung, keine Prognose.<br>
-      Aktien benötigen einen kostenlosen Twelve-Data-Key (⚙). Format für Börsenplätze: <code>MBG:XETR</code>.<br><br>
+      Aktien: Yahoo Finance (ohne Einrichtung über öffentlichen Proxy, stabiler mit eigenem Proxy unter ⚙), ersatzweise Twelve-Data-Key. 4H bei Aktien ist aus Stundenkerzen zusammengesetzt.<br><br>
       Keine Anlageberatung. Alle Angaben ohne Gewähr; Handel birgt das Risiko des Totalverlusts.
     </div></div>
 </div>
@@ -83,13 +83,17 @@ table{border-collapse:collapse;font-size:.75rem;width:100%}td,th{padding:4px 6px
 <div class="mo" id="m-add"><div class="mc"><h3>Asset hinzufügen</h3>
   <div class="fg"><label>Suche: Kürzel oder Name (z. B. BTC, ETH, ALV, Allianz, AAPL)</label><input id="a-t" autocapitalize="characters"></div>
   <div class="fg"><label>Anzeigename (optional)</label><input id="a-n"></div>
-  <div class="mu" style="margin-bottom:8px">Krypto wird automatisch bei Binance gefunden. Aktien brauchen den Twelve-Data-Key (⚙) und zeigen eine Trefferliste zur Auswahl.</div>
+  <div class="mu" style="margin-bottom:8px">Krypto wird automatisch bei Binance gefunden. Aktien (z. B. ALV, Allianz, MBG.DE) werden über Yahoo gesucht und als Trefferliste angezeigt.</div>
   <div id="a-r"></div>
   <div id="a-e" class="err" style="padding:0 0 8px"></div>
   <div class="row" style="justify-content:flex-end"><button data-close>Abbrechen</button><button class="pri" id="a-ok">Prüfen &amp; speichern</button></div></div></div>
 
 <div class="mo" id="m-set"><div class="mc"><h3>Einstellungen</h3>
   <div class="fg"><label>Twelve-Data API-Key (für Aktien, bleibt nur in diesem Browser)</label><input id="s-k" type="password" autocomplete="off"></div>
+  <div class="fg"><label>Eigener Yahoo-Proxy (optional, stabiler) – Worker-URL</label><input id="s-p" type="url" autocomplete="off" placeholder="https://…workers.dev"></div>
+  <details class="mu" style="margin-bottom:10px"><summary>Eigenen Proxy einrichten</summary>
+    <div style="margin:6px 0;line-height:1.5">1. Konto auf dash.cloudflare.com anlegen.<br>2. Workers &amp; Pages → Create → Create Worker → Deploy → Edit code.<br>3. Alten Code löschen, den kopierten Code einfügen, Deploy.<br>4. Die Worker-URL oben eintragen.</div>
+    <button id="s-cp">Worker-Code kopieren</button></details>
   <div class="fg"><label>Kapital (in Anzeigewährung)</label><input id="s-cap" type="number" min="0"></div>
   <div class="fg"><label>Risiko pro Trade (%)</label><input id="s-r" type="number" step="0.1" min="0.1"></div>
   <div class="row" style="justify-content:flex-end"><button data-close>Abbrechen</button><button class="pri" id="s-ok">Speichern</button></div></div></div>
@@ -97,6 +101,32 @@ table{border-collapse:collapse;font-size:.75rem;width:100%}td,th{padding:4px 6px
 <div class="mo" id="m-inf"><div class="mc"><h3 id="inf-t"></h3><p id="inf-b" style="font-size:.85rem;line-height:1.5;margin-bottom:14px"></p>
   <div class="row" style="justify-content:flex-end"><button class="pri" data-close>Verstanden</button></div></div></div>
 
+<script type="text/plain" id="wk-src">
+// Cloudflare Worker: CORS-Proxy für Yahoo Finance (nur /chart und /search)
+export default {
+  async fetch(req) {
+    const u = new URL(req.url);
+    const cors = { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' };
+    // Optional: '*' durch deine GitHub-Pages-Adresse ersetzen, z. B. 'https://DEINNAME.github.io'
+    let target;
+    if (u.pathname === '/chart') {
+      const s = u.searchParams.get('symbol') || '';
+      const i = u.searchParams.get('interval') || '1d';
+      const r = u.searchParams.get('range') || '1y';
+      if (!/^[A-Za-z0-9.^=-]{1,20}$/.test(s) || !/^[0-9a-z]{2,4}$/.test(i) || !/^[0-9a-z]{2,4}$/.test(r))
+        return new Response('{"error":"bad request"}', { status: 400, headers: cors });
+      target = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(s)}?interval=${i}&range=${r}`;
+    } else if (u.pathname === '/search') {
+      const q = (u.searchParams.get('q') || '').slice(0, 40);
+      target = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=10&newsCount=0`;
+    } else {
+      return new Response('{"error":"not found"}', { status: 404, headers: cors });
+    }
+    const r = await fetch(target, { headers: { 'User-Agent': 'Mozilla/5.0' }, cf: { cacheTtl: 60, cacheEverything: true } });
+    return new Response(r.body, { status: r.status, headers: cors });
+  }
+};
+</script>
 <script>
 const $=s=>document.querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -130,25 +160,47 @@ function toast(m){const d=document.createElement('div');d.textContent=m;$('#toas
 const open=id=>$(id).classList.add('open'),close=()=>document.querySelectorAll('.mo').forEach(m=>m.classList.remove('open'));
 const factor=a=>a.curr===cur?1:(a.curr==='USD'?fx.r:1/fx.r);
 const sym=cur==='EUR'?'€':'$';
-async function getJSON(u){const r=await fetch(u);if(!r.ok)throw new Error('HTTP '+r.status);return r.json()}
+async function getJSON(u){const r=await fetch(u);
+  if(r.status===401||r.status===403)throw new Error('API-Key ungültig oder nicht berechtigt (⚙ prüfen)');
+  if(r.status===429)throw new Error('Rate-Limit erreicht, kurz warten');
+  if(!r.ok){let m='';try{m=(await r.json()).message}catch(e){}throw new Error(m?m.slice(0,160):'HTTP '+r.status)}return r.json()}
 
 /* ---------- Daten ---------- */
+const srcName=a=>a.crypto?'Binance':a.src==='yahoo'?'Yahoo Finance':'Twelve Data';
+const PUB='https://api.allorigins.win/raw?url=';
+const chartUrl=(sy,iv,rg)=>cfg.proxy?`${cfg.proxy}/chart?symbol=${encodeURIComponent(sy)}&interval=${iv}&range=${rg}`:PUB+encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sy)}?interval=${iv}&range=${rg}`);
+const searchUrl=q=>cfg.proxy?`${cfg.proxy}/search?q=${encodeURIComponent(q)}`:PUB+encodeURIComponent(`https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=10&newsCount=0`);
+async function yahoo(a,iv){
+  const m={'1h':['60m','6mo'],'4h':['60m','1y'],'1d':['1d','2y'],'1w':['1wk','10y']}[iv];
+  const j=await getJSON(chartUrl(a.symbol,m[0],m[1]));
+  const r=j.chart&&j.chart.result&&j.chart.result[0];
+  if(!r||!r.timestamp)throw new Error((j.chart&&j.chart.error&&j.chart.error.description)||'Keine Daten');
+  const q=r.indicators.quote[0];let d=[];
+  r.timestamp.forEach((t,i)=>{if(q.close[i]!=null&&q.open[i]!=null&&q.high[i]!=null&&q.low[i]!=null)d.push({time:t,open:q.open[i],high:q.high[i],low:q.low[i],close:q.close[i],vol:q.volume[i]||0})});
+  if(iv==='4h'){const o=[];for(let i=d.length;i>0;i-=4){const c=d.slice(Math.max(0,i-4),i);o.unshift({time:c[0].time,open:c[0].open,high:Math.max(...c.map(x=>x.high)),low:Math.min(...c.map(x=>x.low)),close:c[c.length-1].close,vol:c.reduce((x,y)=>x+y.vol,0)})}d=o}
+  d.cur=r.meta&&r.meta.currency;return d;
+}
 async function candles(a,iv){
   const k=a.symbol+'|'+iv,c=cache.get(k);if(c&&Date.now()-c.t<55000)return c.d;
-  let d;
+  let d,cur0;
   if(a.crypto){
     const j=await getJSON(`https://api.binance.com/api/v3/klines?symbol=${a.symbol}&interval=${iv}&limit=500`);
     d=j.map(x=>({time:Math.floor(x[0]/1000),open:+x[1],high:+x[2],low:+x[3],close:+x[4],vol:+x[5]}));
+  }else if(a.src==='yahoo'){d=await yahoo(a,iv);cur0=d.cur;
   }else{
     if(!cfg.key)throw new Error('Twelve-Data-Key fehlt (⚙ Einstellungen)');
     const m={'1h':'1h','4h':'4h','1d':'1day','1w':'1week'},[s,ex]=a.symbol.split(':');
-    const j=await getJSON(`https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(s)}${ex?'&mic_code='+encodeURIComponent(ex):''}&interval=${m[iv]}&outputsize=500&apikey=${encodeURIComponent(cfg.key)}`);
+    const base=`https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(s)}&interval=${m[iv]}&outputsize=500&apikey=${encodeURIComponent(cfg.key)}`;
+    const tries=ex?['&mic_code='+encodeURIComponent(ex),'&exchange='+encodeURIComponent(ex)]:[''];
+    let j,lastErr;
+    for(const q of tries){try{j=await getJSON(base+q);if(j.values)break;lastErr=new Error(j.message||'Keine Daten')}catch(e){lastErr=e;j=null;if(/Key|Rate/.test(e.message))break}}
+    if(!j||!j.values)throw lastErr||new Error('Keine Daten');
     if(j.status==='error'||!j.values)throw new Error(j.message||'Keine Daten für dieses Symbol');
     d=j.values.slice().reverse().map(v=>{let s=v.datetime;if(s.length===10)s+=' 00:00:00';return{time:Math.floor(Date.parse(s.replace(' ','T')+'Z')/1000),open:+v.open,high:+v.high,low:+v.low,close:+v.close,vol:+(v.volume||0)}});
   }
   d=d.filter((x,i)=>isFinite(x.close)&&(i===0||x.time>d[i-1].time));
   if(d.length<30)throw new Error('Zu wenig Kerzen');
-  cache.set(k,{t:Date.now(),d});return d;
+  d=d.slice(-500);d.cur=cur0;cache.set(k,{t:Date.now(),d});return d;
 }
 async function loadFx(){try{const j=await getJSON('https://api.frankfurter.app/latest?from=USD&to=EUR');fx={r:j.rates.EUR,live:true,ts:j.date}}catch(e){fx.live=false}}
 
@@ -246,7 +298,7 @@ async function render(){
     const al=alerts.filter(x=>x.symbol===a.symbol).length;
     const c=st.crv==null?'–':fmt(st.crv,2);
     ban.push(`${esc(a.name)}: <b class="${st.crv>=2?'up':st.crv<1?'dn':'wa'}">${c}</b>`);
-    src.push(a.crypto?'Binance':'Twelve Data');
+    src.push(srcName(a));
     card.innerHTML=`
     <div class="hd"><div><div class="nm">${esc(a.name)} <span class="mu">${esc(a.symbol)}</span></div>
       <div class="pr">${s}${fmt(an.last)} <span class="${an.chg>=0?'up':'dn'}" style="font-size:.8rem">${an.chg>=0?'▲':'▼'} ${fmt(Math.abs(an.chg),2)} %</span></div>
@@ -273,7 +325,7 @@ async function render(){
       ${st.size&&st.size*st.entry>cfg.capital?'<br><span class="wa">Positionswert übersteigt Kapital (Hebel nötig)</span>':''}
       ${an.rsi&&an.cls==='dn'&&st.dir==='Long'?'<br><span class="wa">Long gegen den Abwärtstrend</span>':''}
       <button data-act="reset" data-sym="${esc(a.symbol)}" style="margin-top:6px">Auto-Werte</button></div></div>
-    <div class="mu" style="margin-top:8px">Stand: ${hhmm(Date.now())} · Letzte Kerze vor ${age} h · Quelle: ${a.crypto?'Binance':'Twelve Data'} · ${tf.toUpperCase()}</div>`;
+    <div class="mu" style="margin-top:8px">Stand: ${hhmm(Date.now())} · Letzte Kerze vor ${age} h · Quelle: ${srcName(a)} · ${tf.toUpperCase()}</div>`;
     $('#grid').insertBefore(card,$('#macro'));
     mkChart(card.querySelector('.ch'),d,an,st);
     checkAlerts(a,r.d[r.d.length-1].close);
@@ -335,23 +387,27 @@ $('#b-cur').onclick=async()=>{cur=cur==='EUR'?'USD':'EUR';LS.set('qt7_cur',cur);
 $('#b-th').onclick=()=>{theme=theme==='light'?'dark':'light';LS.set('qt7_theme',theme);document.body.dataset.theme=theme;render()};
 $('#b-ref').onclick=()=>{cache.clear();loadFx().then(()=>{render();loadMacro()})};
 $('#b-add').onclick=()=>{$('#a-e').textContent='';open('#m-add')};
-$('#b-set').onclick=()=>{$('#s-k').value=cfg.key;$('#s-cap').value=cfg.capital;$('#s-r').value=cfg.risk;open('#m-set')};
-$('#s-ok').onclick=()=>{cfg={key:$('#s-k').value.trim(),capital:Math.max(0,+$('#s-cap').value||0),risk:Math.max(.1,+$('#s-r').value||1)};LS.set('qt7_cfg',cfg);cache.clear();close();render()};
+$('#b-set').onclick=()=>{$('#s-k').value=cfg.key;$('#s-p').value=cfg.proxy||'';$('#s-cap').value=cfg.capital;$('#s-r').value=cfg.risk;open('#m-set')};
+$('#s-ok').onclick=()=>{cfg={key:$('#s-k').value.trim(),proxy:$('#s-p').value.trim().replace(/\/+$/,''),capital:Math.max(0,+$('#s-cap').value||0),risk:Math.max(.1,+$('#s-r').value||1)};LS.set('qt7_cfg',cfg);cache.clear();close();render()};
 let found=[];
 const aErr=m=>$('#a-e').textContent=m;
 async function addAsset(a){
   aErr('Prüfe Daten …');
-  try{await candles(a,'1d')}catch(e){aErr('Keine Daten: '+e.message);return}
+  let d;try{d=await candles(a,'1d')}catch(e){aErr('Keine Daten: '+e.message);return}
+  if(a.src==='yahoo'){if(d.cur==='EUR'||d.cur==='USD')a.curr=d.cur;else{aErr('Währung '+d.cur+' wird noch nicht unterstützt (nur EUR/USD).');return}}
   assets.push(a);sel=[...sel,a.symbol].slice(-3);LS.set('qt7_assets',assets);LS.set('qt7_sel',sel);
   $('#a-t').value=$('#a-n').value='';$('#a-r').innerHTML='';aErr('');close();render();
 }
 function pick(i){const x=found[i];if(!x)return;
-  const sy=x.symbol+':'+(x.mic_code||x.exchange);
-  if(assets.some(a=>a.symbol===sy)){aErr('Asset existiert bereits.');return}
-  addAsset({symbol:sy,name:($('#a-n').value.trim()||x.instrument_name||x.symbol).slice(0,30),crypto:false,curr:x.currency});
+  if(assets.some(a=>a.symbol===x.symbol)){aErr('Asset existiert bereits.');return}
+  addAsset({symbol:x.symbol,name:($('#a-n').value.trim()||x.name||x.symbol).slice(0,30),crypto:false,src:x.src,curr:x.cur||'USD'});
+}
+function showFound(){
+  if(!found.length){aErr('Keine Treffer gefunden.');return}
+  aErr('');$('#a-r').innerHTML='<div class="mu" style="margin-bottom:4px">Treffer, bitte antippen:</div>'+found.map((x,i)=>`<button data-act="pick" data-i="${i}" style="width:100%;text-align:left;margin-bottom:4px">${esc(x.symbol)} · ${esc(x.name||'')} · ${esc(x.exch||'')}${x.cur?' · '+esc(x.cur):''}</button>`).join('');
 }
 $('#a-ok').onclick=async()=>{
-  const raw=$('#a-t').value.toUpperCase().replace(/[^A-Z0-9:._ -]/g,'').trim();if(!raw)return;
+  const raw=$('#a-t').value.toUpperCase().replace(/[^A-Z0-9:._^= -]/g,'').trim();if(!raw)return;
   $('#a-r').innerHTML='';aErr('Suche …');
   const nm=$('#a-n').value.trim().slice(0,30),base=raw.replace(/(USDT|USDC|BUSD)$/,'');
   if(/^[A-Z0-9]{2,12}$/.test(base)){
@@ -360,14 +416,22 @@ $('#a-ok').onclick=async()=>{
     let ok=false;try{await candles(a,'1d');ok=true}catch(e){}
     if(ok)return addAsset(a);
   }
-  if(!cfg.key){aErr('Nicht als Krypto bei Binance gefunden. Für Aktien bitte zuerst den Twelve-Data-Key unter ⚙ eintragen.');return}
-  if(raw.includes(':')){const [s]=raw.split(':');return addAsset({symbol:raw,name:nm||s,crypto:false,curr:'EUR'})}
   try{
-    const j=await getJSON(`https://api.twelvedata.com/symbol_search?symbol=${encodeURIComponent(raw)}&outputsize=15&apikey=${encodeURIComponent(cfg.key)}`);
-    if(j.status==='error')throw new Error(j.message);
-    found=(j.data||[]).filter(x=>x.currency==='EUR'||x.currency==='USD');
-    if(!found.length){aErr('Keine Treffer in EUR/USD gefunden.');return}
-    aErr('');$('#a-r').innerHTML='<div class="mu" style="margin-bottom:4px">Treffer, bitte antippen:</div>'+found.map((x,i)=>`<button data-act="pick" data-i="${i}" style="width:100%;text-align:left;margin-bottom:4px">${esc(x.symbol)} · ${esc(x.instrument_name||'')} · ${esc(x.exchange||'')} · ${esc(x.currency)}</button>`).join('');
+    let yerr;
+    try{
+      const j=await getJSON(searchUrl(raw));
+      found=(j.quotes||[]).filter(x=>x.symbol&&['EQUITY','ETF','INDEX'].includes(x.quoteType)).map(x=>({src:'yahoo',symbol:x.symbol,name:x.shortname||x.longname||x.symbol,exch:x.exchDisp||''}));
+      if(found.length)return showFound();
+      yerr=new Error('Keine Treffer');
+    }catch(e){yerr=e}
+    if(cfg.key){
+      if(raw.includes(':')){const [s0]=raw.split(':');return addAsset({symbol:raw,name:nm||s0,crypto:false,src:'td',curr:'EUR'})}
+      const j=await getJSON(`https://api.twelvedata.com/symbol_search?symbol=${encodeURIComponent(raw)}&outputsize=15&apikey=${encodeURIComponent(cfg.key)}`);
+      if(j.status==='error')throw new Error(j.message);
+      found=(j.data||[]).filter(x=>x.currency==='EUR'||x.currency==='USD').map(x=>({src:'td',symbol:x.symbol+':'+(x.mic_code||x.exchange),name:x.instrument_name,exch:x.exchange,cur:x.currency}));
+      return showFound();
+    }
+    aErr('Yahoo-Suche fehlgeschlagen: '+yerr.message+(cfg.proxy?'':' – der öffentliche Proxy ist unzuverlässig, richte unter ⚙ einen eigenen ein.'));
   }catch(e){aErr('Suche fehlgeschlagen: '+e.message)}
 };
 document.querySelectorAll('.mo').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)close()}));
@@ -376,6 +440,7 @@ setInterval(()=>{if(document.hidden||document.querySelector('.mo.open')||documen
 setInterval(loadMacro,300000);
 
 document.body.dataset.theme=theme;
+$('#s-cp').onclick=async()=>{try{await navigator.clipboard.writeText($('#wk-src').textContent.trim());toast('Worker-Code kopiert')}catch(e){toast('Kopieren nicht möglich')}};
 function loadLib(){
   const urls=['https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js',
     'https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js',
