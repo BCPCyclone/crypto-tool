@@ -167,12 +167,20 @@ async function getJSON(u){const r=await fetch(u);
 
 /* ---------- Daten ---------- */
 const srcName=a=>a.crypto?'Binance':a.src==='yahoo'?'Yahoo Finance':'Twelve Data';
-const PUB='https://api.allorigins.win/raw?url=';
-const chartUrl=(sy,iv,rg)=>cfg.proxy?`${cfg.proxy}/chart?symbol=${encodeURIComponent(sy)}&interval=${iv}&range=${rg}`:PUB+encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sy)}?interval=${iv}&range=${rg}`);
-const searchUrl=q=>cfg.proxy?`${cfg.proxy}/search?q=${encodeURIComponent(q)}`:PUB+encodeURIComponent(`https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=10&newsCount=0`);
+const PROX=[u=>'https://api.allorigins.win/raw?url='+encodeURIComponent(u),u=>'https://corsproxy.io/?url='+encodeURIComponent(u),u=>'https://api.codetabs.com/v1/proxy/?quest='+u];
+let pxi=0;
+async function yget(w,y){
+  if(cfg.proxy)return getJSON(w);
+  let err;
+  for(let n=0;n<PROX.length;n++){const i=(pxi+n)%PROX.length;try{const j=await getJSON(PROX[i](y));pxi=i;return j}catch(e){err=e}}
+  throw err;
+}
+const E=encodeURIComponent;
+const yChart=(sy,iv,rg)=>yget(`${cfg.proxy}/chart?symbol=${E(sy)}&interval=${iv}&range=${rg}`,`https://query1.finance.yahoo.com/v8/finance/chart/${E(sy)}?interval=${iv}&range=${rg}`);
+const ySearch=q=>yget(`${cfg.proxy}/search?q=${E(q)}`,`https://query1.finance.yahoo.com/v1/finance/search?q=${E(q)}&quotesCount=10&newsCount=0`);
 async function yahoo(a,iv){
   const m={'1h':['60m','6mo'],'4h':['60m','1y'],'1d':['1d','2y'],'1w':['1wk','10y']}[iv];
-  const j=await getJSON(chartUrl(a.symbol,m[0],m[1]));
+  const j=await yChart(a.symbol,m[0],m[1]);
   const r=j.chart&&j.chart.result&&j.chart.result[0];
   if(!r||!r.timestamp)throw new Error((j.chart&&j.chart.error&&j.chart.error.description)||'Keine Daten');
   const q=r.indicators.quote[0];let d=[];
@@ -419,7 +427,7 @@ $('#a-ok').onclick=async()=>{
   try{
     let yerr;
     try{
-      const j=await getJSON(searchUrl(raw));
+      const j=await ySearch(raw);
       found=(j.quotes||[]).filter(x=>x.symbol&&['EQUITY','ETF','INDEX'].includes(x.quoteType)).map(x=>({src:'yahoo',symbol:x.symbol,name:x.shortname||x.longname||x.symbol,exch:x.exchDisp||''}));
       if(found.length)return showFound();
       yerr=new Error('Keine Treffer');
