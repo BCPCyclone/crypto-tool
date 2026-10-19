@@ -7,7 +7,6 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="QuantTerminal">
 <title>Quant Terminal – Multi-Asset Research</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/lightweight-charts/4.1.1/lightweight-charts.standalone.production.js"></script>
 <style>
 :root{--bg:#e8eef4;--card:#fff;--tx:#18222d;--mu:#566676;--bd:#cdd8e3;--ac:#1f6fb4;--up:#0a9f67;--dn:#d6384c;--wa:#b87a14;--inf:#eef4fb;--ban:#18222d;--bant:#fff}
 [data-theme=dark]{--bg:#0b0e14;--card:#151a23;--tx:#e1e7ec;--mu:#8d97a5;--bd:#262d3d;--ac:#4b8df0;--up:#2bd18a;--dn:#ff5c70;--wa:#e8a93c;--inf:#1e293b;--ban:#151a23;--bant:#e1e7ec}
@@ -352,7 +351,20 @@ setInterval(()=>{if(document.hidden||document.querySelector('.mo.open')||documen
 setInterval(loadMacro,300000);
 
 document.body.dataset.theme=theme;
-(async()=>{await loadFx();render();loadMacro()})();
+function loadLib(){
+  const urls=['https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js',
+    'https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/lightweight-charts/4.1.1/lightweight-charts.standalone.production.js'];
+  return new Promise(res=>{
+    const next=i=>{
+      if(typeof LightweightCharts!=='undefined'||i>=urls.length)return res();
+      const s=document.createElement('script');s.src=urls[i];
+      s.onload=()=>res();s.onerror=()=>next(i+1);document.head.appendChild(s);
+    };
+    next(0);
+  });
+}
+(async()=>{await Promise.all([loadLib(),loadFx()]);render();loadMacro()})();
 </script>
 </body>
 </html>
