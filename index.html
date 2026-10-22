@@ -74,7 +74,7 @@ table{border-collapse:collapse;font-size:.75rem;width:100%}td,th{padding:4px 6px
       <b>Signal:</b> EMA-Kreuzungen, Trendregime.<br>
       <b>Szenario:</b> Fibonacci und Volatilitätskegel sind Orientierung, keine Prognose.<br>
       Aktien: Yahoo Finance (ohne Einrichtung über öffentlichen Proxy, stabiler mit eigenem Proxy unter ⚙), ersatzweise Twelve-Data-Key. 4H bei Aktien ist aus Stundenkerzen zusammengesetzt.<br><br>
-      Keine Anlageberatung. Alle Angaben ohne Gewähr; Handel birgt das Risiko des Totalverlusts.
+      Fundamentaldaten und Nachrichten kommen inoffiziell von Yahoo (nicht für jeden Titel verfügbar); die Nachrichtenstimmung ist eine grobe Stichwort-Schätzung.<br><br>Keine Anlageberatung. Alle Angaben ohne Gewähr; Handel birgt das Risiko des Totalverlusts.
     </div></div>
 </div>
 
@@ -102,23 +102,30 @@ table{border-collapse:collapse;font-size:.75rem;width:100%}td,th{padding:4px 6px
   <div class="row" style="justify-content:flex-end"><button class="pri" data-close>Verstanden</button></div></div></div>
 
 <script type="text/plain" id="wk-src">
-// Cloudflare Worker: CORS-Proxy für Yahoo Finance (nur /chart und /search)
+// Cloudflare Worker: CORS-Proxy für Yahoo Finance (/chart, /search, /fund)
 export default {
   async fetch(req) {
     const u = new URL(req.url);
     const cors = { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' };
     // Optional: '*' durch deine GitHub-Pages-Adresse ersetzen, z. B. 'https://DEINNAME.github.io'
+    const bad = () => new Response('{"error":"bad request"}', { status: 400, headers: cors });
+    const sym = u.searchParams.get('symbol') || '';
     let target;
     if (u.pathname === '/chart') {
-      const s = u.searchParams.get('symbol') || '';
       const i = u.searchParams.get('interval') || '1d';
       const r = u.searchParams.get('range') || '1y';
-      if (!/^[A-Za-z0-9.^=-]{1,20}$/.test(s) || !/^[0-9a-z]{2,4}$/.test(i) || !/^[0-9a-z]{2,4}$/.test(r))
-        return new Response('{"error":"bad request"}', { status: 400, headers: cors });
-      target = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(s)}?interval=${i}&range=${r}`;
+      if (!/^[A-Za-z0-9.^=-]{1,20}$/.test(sym) || !/^[0-9a-z]{2,4}$/.test(i) || !/^[0-9a-z]{2,4}$/.test(r)) return bad();
+      const ev = u.searchParams.get('ev') ? '&events=div' : '';
+      target = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=${i}&range=${r}${ev}`;
     } else if (u.pathname === '/search') {
       const q = (u.searchParams.get('q') || '').slice(0, 40);
-      target = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=10&newsCount=0`;
+      const n = Math.min(10, parseInt(u.searchParams.get('n') || '0', 10) || 0);
+      target = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=${n ? 0 : 10}&newsCount=${n}`;
+    } else if (u.pathname === '/fund') {
+      const t = u.searchParams.get('types') || '';
+      const p1 = u.searchParams.get('p1') || '', p2 = u.searchParams.get('p2') || '';
+      if (!/^[A-Za-z0-9.^=-]{1,20}$/.test(sym) || !/^[A-Za-z,]{1,400}$/.test(t) || !/^\d{9,10}$/.test(p1) || !/^\d{9,10}$/.test(p2)) return bad();
+      target = `https://query2.finance.yahoo.com/ws/fundamentals-timeseries/v1/finance/timeseries/${encodeURIComponent(sym)}?type=${t}&period1=${p1}&period2=${p2}`;
     } else {
       return new Response('{"error":"not found"}', { status: 404, headers: cors });
     }
@@ -145,7 +152,12 @@ const INFO={
  fng:['Fear & Greed (Krypto)','Index von 0 (extreme Angst) bis 100 (extreme Gier) von alternative.me. Gilt für den Kryptomarkt.'],
  fund:['Funding Rate (BTC Perp)','Gebühr zwischen Long- und Short-Händlern. Stark positiv = viele gehebelte Longs (Überhitzungsrisiko).'],
  dom:['BTC-Dominanz','Anteil von Bitcoin an der gesamten Kryptomarktkapitalisierung (CoinGecko).'],
- fx:['EUR/USD','Tageskurs der EZB via frankfurter.app, genutzt für die Währungsanzeige.']
+ fx:['EUR/USD','Tageskurs der EZB via frankfurter.app, genutzt für die Währungsanzeige.'],
+ mtf:['Mehrzeitebenen','Vergleicht den Trend auf Tages- und Wochenbasis. Stimmen beide überein, ist das Signal verlässlicher; widersprechen sie sich, handelst du oft gegen die übergeordnete Richtung.'],
+ rs:['Relative Stärke','Vergleich mit einer Benchmark (Krypto: Bitcoin; Bitcoin: S&P 500; deutsche Aktien: DAX; sonst S&P 500). Der Wert zeigt, wie sich das Kursverhältnis Asset/Benchmark über 3, 6 und 12 Monate verändert hat. Plus = das Asset war stärker. Der Trend vergleicht das aktuelle Verhältnis mit seinem 50-Tage-Schnitt.'],
+ bt:['Backtest','Prüft rückwirkend, wie sich das Asset nach jedem früheren Tag mit demselben Technik-Score entwickelte (Trend, MACD, RSI, EMA-Kreuz). Gezeigt werden durchschnittliche Rendite und Trefferquote für die Haltedauer, verglichen mit allen Tagen. Es nutzt nur Daten bis zum jeweiligen Tag, enthält aber keine Gebühren, überlappende Zeiträume und keine Fundamentaldaten oder Nachrichten. Vergangenes Verhalten ist keine Garantie.'],
+ fa:['Fundamentaldaten','KGV/KBV/KUV = Kurs im Verhältnis zu Gewinn, Buchwert und Umsatz. EV/EBITDA = Unternehmenswert zu operativem Gewinn. Umsatzwachstum und Nettomarge stammen aus den letzten Jahresberichten, Schulden/Eigenkapital zeigt die Verschuldung. Die Daten kommen inoffiziell von Yahoo und können fehlen oder verzögert sein.'],
+ news:['Nachrichten und Stimmung','Aktuelle Schlagzeilen von Yahoo. Die Stimmung wird nur grob per Stichwortliste (deutsch/englisch) aus den Überschriften geschätzt und ersetzt nicht das Lesen der Meldungen.']
 };
 const DEF=[{symbol:'BTCUSDT',name:'Bitcoin',crypto:true,curr:'USD'},{symbol:'ETHUSDT',name:'Ethereum',crypto:true,curr:'USD'},{symbol:'SOLUSDT',name:'Solana',crypto:true,curr:'USD'}];
 let assets=LS.get('qt7_assets',DEF),sel=LS.get('qt7_sel',[assets[0]?.symbol]).filter(Boolean),tf=LS.get('qt7_tf','1d'),cur=LS.get('qt7_cur','EUR'),theme=LS.get('qt7_theme','light');
@@ -160,7 +172,7 @@ function toast(m){const d=document.createElement('div');d.textContent=m;$('#toas
 const open=id=>$(id).classList.add('open'),close=()=>document.querySelectorAll('.mo').forEach(m=>m.classList.remove('open'));
 const factor=a=>a.curr===cur?1:(a.curr==='USD'?fx.r:1/fx.r);
 const sym=cur==='EUR'?'€':'$';
-async function getJSON(u){const r=await fetch(u);
+async function getJSON(u){const r=await fetch(u,{signal:AbortSignal.timeout?AbortSignal.timeout(15000):undefined});
   if(r.status===401||r.status===403)throw new Error('API-Key ungültig oder nicht berechtigt (⚙ prüfen)');
   if(r.status===429)throw new Error('Rate-Limit erreicht, kurz warten');
   if(!r.ok){let m='';try{m=(await r.json()).message}catch(e){}throw new Error(m?m.slice(0,160):'HTTP '+r.status)}return r.json()}
@@ -176,7 +188,35 @@ async function yget(w,y){
   throw err;
 }
 const E=encodeURIComponent;
-const yChart=(sy,iv,rg)=>yget(`${cfg.proxy}/chart?symbol=${E(sy)}&interval=${iv}&range=${rg}`,`https://query1.finance.yahoo.com/v8/finance/chart/${E(sy)}?interval=${iv}&range=${rg}`);
+const yChart=(sy,iv,rg,ev)=>yget(`${cfg.proxy}/chart?symbol=${E(sy)}&interval=${iv}&range=${rg}${ev?'&ev=1':''}`,`https://query1.finance.yahoo.com/v8/finance/chart/${E(sy)}?interval=${iv}&range=${rg}${ev?'&events=div':''}`);
+const FT='trailingPeRatio,trailingPbRatio,trailingPsRatio,trailingEnterprisesValueEBITDARatio,annualTotalRevenue,annualNetIncome,annualTotalDebt,annualStockholdersEquity';
+async function fundamentals(a){
+  const k='F|'+a.symbol,c=cache.get(k);if(c&&Date.now()-c.t<216e5)return c.d;
+  const p2=Math.floor(Date.now()/1000),p1=p2-6*365*86400;
+  const [ts,ch]=await Promise.allSettled([
+    yget(`${cfg.proxy}/fund?symbol=${E(a.symbol)}&types=${FT}&p1=${p1}&p2=${p2}`,`https://query2.finance.yahoo.com/ws/fundamentals-timeseries/v1/finance/timeseries/${E(a.symbol)}?type=${FT}&period1=${p1}&period2=${p2}`),
+    yChart(a.symbol,'1mo','1y',true)]);
+  const o={};
+  if(ts.status==='fulfilled')((ts.value.timeseries||{}).result||[]).forEach(r=>{const t=(r.meta&&r.meta.type||[])[0],arr=t&&r[t];if(arr)o[t]=arr.filter(x=>x&&x.reportedValue&&isFinite(x.reportedValue.raw)).map(x=>x.reportedValue.raw)});
+  const L=t=>o[t]&&o[t].length?o[t][o[t].length-1]:null;
+  const f={pe:L('trailingPeRatio'),pb:L('trailingPbRatio'),ps:L('trailingPsRatio'),ev:L('trailingEnterprisesValueEBITDARatio'),gr:null,nm:null,de:null,dy:null,hi:null,lo:null,price:null};
+  const rv=o.annualTotalRevenue||[],ni=o.annualNetIncome||[];
+  if(rv.length>1&&rv[rv.length-2]>0)f.gr=(rv[rv.length-1]/rv[rv.length-2]-1)*100;
+  if(rv.length&&ni.length&&rv[rv.length-1]>0)f.nm=ni[ni.length-1]/rv[rv.length-1]*100;
+  const dt=L('annualTotalDebt'),eq=L('annualStockholdersEquity');if(dt!=null&&eq>0)f.de=dt/eq*100;
+  if(ch.status==='fulfilled'){const r=ch.value.chart&&ch.value.chart.result&&ch.value.chart.result[0];
+    if(r){const m=r.meta||{};f.hi=m.fiftyTwoWeekHigh||null;f.lo=m.fiftyTwoWeekLow||null;f.price=m.regularMarketPrice||null;
+      const dv=r.events&&r.events.dividends;if(dv&&f.price){const lim=Date.now()/1000-365*86400;f.dy=Object.values(dv).filter(x=>x.date>=lim).reduce((q,x)=>q+x.amount,0)/f.price*100}}}
+  const d=Object.values(f).some(v=>v!=null)?f:null;
+  cache.set(k,{t:Date.now(),d});return d;
+}
+async function news(a){
+  const k='N|'+a.symbol,c=cache.get(k);if(c&&Date.now()-c.t<6e5)return c.d;
+  const q=a.crypto?a.symbol.replace(/(USDT|USDC|BUSD)$/,'')+'-USD':a.symbol;
+  const j=await yget(`${cfg.proxy}/search?q=${E(q)}&n=8`,`https://query1.finance.yahoo.com/v1/finance/search?q=${E(q)}&quotesCount=0&newsCount=8`);
+  const d=(j.news||[]).slice(0,8).map(x=>({t:x.title,p:x.publisher,l:x.link,ts:x.providerPublishTime}));
+  cache.set(k,{t:Date.now(),d});return d;
+}
 const ySearch=q=>yget(`${cfg.proxy}/search?q=${E(q)}`,`https://query1.finance.yahoo.com/v1/finance/search?q=${E(q)}&quotesCount=10&newsCount=0`);
 async function yahoo(a,iv){
   const m={'1h':['60m','6mo'],'4h':['60m','1y'],'1d':['1d','2y'],'1w':['1wk','10y']}[iv];
@@ -253,21 +293,53 @@ function setup(a,an,f){
 }
 
 /* ---------- Bewertung ---------- */
-function verdict(an,st,vol,s){
+const POS=/\b(beat|beats|surge|surges|soar|soars|rally|record|upgrade|upgrades|raises|growth|gain|gains|jump|jumps|profit|outperform|bullish|approval)\b|gewinn|rekord|hebt|steigt|steigen|kaufempfehlung|kursplus|übertrifft|wachstum/i;
+const NEG=/\b(miss|misses|plunge|plunges|drop|drops|fall|falls|slump|downgrade|downgrades|cuts|lawsuit|probe|investigation|warns|warning|loss|losses|decline|bearish|recall|fraud)\b|verlust|einbruch|senkt|klage|warnt|warnung|fällt|fallen|abstufung|rückruf|ermittl/i;
+function sentiment(nw){if(!nw||!nw.length)return null;let p=0,n=0;nw.forEach(x=>{const u=POS.test(x.t||''),v=NEG.test(x.t||'');if(u&&!v)p++;else if(v&&!u)n++});const d=p-n;return{p,n,t:nw.length,s:d>=2?1:d<=-2?-1:0}}
+function fundScore(f){if(!f)return null;let s=0;
+  if(f.pe>0){if(f.pe<15)s++;else if(f.pe>35)s--}
+  if(f.gr!=null){if(f.gr>8)s++;else if(f.gr<0)s--}
+  if(f.nm!=null){if(f.nm>10)s++;else if(f.nm<0)s--}
+  if(f.de!=null&&f.de>200)s--;
+  return Math.max(-3,Math.min(3,s))}
+function verdict(an,st,vol,s,fa,nw,ex){
+  ex=ex||{};
   let sc=0;
   if(an.enough)sc+=an.cls==='up'?2:an.cls==='dn'?-2:0;
   sc+=an.hist>=0?1:-1;
   if(an.rsi>70)sc-=1;else if(an.rsi<30)sc+=1;
   if(/Golden/.test(an.cross))sc++;if(/Death/.test(an.cross))sc--;
-  const lab=sc>=3?'konstruktiv':sc<=-3?'vorsichtig':'neutral',cls=sc>=3?'up':sc<=-3?'dn':'wa';
+  const fs=fundScore(fa),sn=sentiment(nw),m=ex.mtf,rl=ex.rs;
+  const ms=m?(m.d.cls==='up'&&m.w.cls==='up'?1:m.d.cls==='dn'&&m.w.cls==='dn'?-1:0):0;
+  const rsc=rl&&rl.r6!=null?(rl.strong&&rl.r6>0?1:!rl.strong&&rl.r6<0?-1:0):0;
+  const tot=sc+(fs||0)+(sn?sn.s:0)+ms+rsc;
+  const lab=tot>=3?'konstruktiv':tot<=-3?'vorsichtig':'neutral',cls=tot>=3?'up':tot<=-3?'dn':'wa';
   const n=an.e200.length,d200=an.enough?(an.last/an.e200[n-1]-1)*100:null;
-  const rs=an.rsi>70?'überkauft':an.rsi<30?'überverkauft':'neutral';
-  let t1=(an.enough?`Technisch zeigt sich ein ${an.regime.replace('Übergang / Seitwärts','Übergangs-/Seitwärtsmarkt')}`:'Für ein Trendurteil liegen zu wenig Kerzen vor (unter 200)')+(an.cross!=='–'?` mit ${an.cross.split(' (')[0]}`:'')+(d200!=null?`, der Kurs liegt ${fmt(Math.abs(d200),1)} % ${d200>=0?'über':'unter'} der EMA 200`:'')+`; das MACD-Momentum ist ${an.hist>=0?'positiv':'negativ'} und der RSI (${fmt(an.rsi,0)}) ${rs}.`;
+  const rsiL=an.rsi>70?'überkauft':an.rsi<30?'überverkauft':'neutral';
+  const LB={up:'Aufwärtstrend',dn:'Abwärtstrend',wa:'Übergangsphase'};
+  const mt=m?(m.d.cls===m.w.cls?(m.d.cls==='wa'?'Tages- und Wochentrend sind beide ohne klare Richtung':`Tages- und Wochentrend stimmen überein (${LB[m.d.cls]})`):`Tages- (${LB[m.d.cls]}) und Wochentrend (${LB[m.w.cls]}) widersprechen sich`):'';
+  const t1=(an.enough?`Technisch zeigt sich ein ${an.regime.replace('Übergang / Seitwärts','Übergangs-/Seitwärtsmarkt')}`:'Für ein Trendurteil liegen zu wenig Kerzen vor (unter 200)')+(an.cross!=='–'?` mit ${an.cross.split(' (')[0]}`:'')+(d200!=null?`, der Kurs liegt ${fmt(Math.abs(d200),1)} % ${d200>=0?'über':'unter'} der EMA 200`:'')+`; das MACD-Momentum ist ${an.hist>=0?'positiv':'negativ'} und der RSI (${fmt(an.rsi,0)}) ${rsiL}`+(mt?'; '+mt:'')+'.';
   const nf=an.fib.reduce((b,f)=>Math.abs(f.v-an.last)<Math.abs(b.v-an.last)?f:b);
   const q=st.crv==null?null:st.crv>=2?'attraktiv':st.crv>=1?'mäßig':'schwach';
-  let t2=`Der Kurs bewegt sich zwischen Support ${an.sup?s+fmt(an.sup):'(offen)'} und Resistance ${an.res?s+fmt(an.res):'(offen)'}, das nächste Fibonacci-Level liegt bei ${s}${fmt(nf.v)} (${nf.r}); das ${st.dir}-Setup bietet ein ${q?q+'es':'nicht berechenbares'} CRV${st.crv!=null?' von '+fmt(st.crv,1):''}`+((st.dir==='Long'&&an.cls==='dn')||(st.dir==='Short'&&an.cls==='up')?' und läuft gegen den Haupttrend':'')+'.';
-  let t3=`Die ATR beträgt ${fmt(an.atr/an.last*100,1)} % des Kurses`+(vol?`, die Volatilität ${fmt(vol.ann*100,0)} % p.a. (1σ-Spanne für 1 Jahr: ${s}${fmt(an.last*Math.exp(-vol.ann))} bis ${s}${fmt(an.last*Math.exp(vol.ann))})`:'')+`. Regelbasierte Gesamteinschätzung: <b class="${cls}">${lab}</b>, keine Anlageberatung.`;
-  return{lab,cls,html:`${t1} ${t2} ${t3}`};
+  const t2=`Der Kurs bewegt sich zwischen Support ${an.sup?s+fmt(an.sup):'(offen)'} und Resistance ${an.res?s+fmt(an.res):'(offen)'}, das nächste Fibonacci-Level liegt bei ${s}${fmt(nf.v)} (${nf.r}); das ${st.dir}-Setup bietet ein ${q?q+'es':'nicht berechenbares'} CRV${st.crv!=null?' von '+fmt(st.crv,1):''}`+((st.dir==='Long'&&an.cls==='dn')||(st.dir==='Short'&&an.cls==='up')?' und läuft gegen den Haupttrend':'')+'.';
+  const t3=`Die ATR beträgt ${fmt(an.atr/an.last*100,1)} % des Kurses`+(vol?`, die Volatilität ${fmt(vol.ann*100,0)} % p.a. (1σ-Spanne für 1 Jahr: ${s}${fmt(an.last*Math.exp(-vol.ann))} bis ${s}${fmt(an.last*Math.exp(vol.ann))})`:'')+'.';
+  const parts=[];
+  if(rl&&rl.r6!=null)parts.push(`relativ zu ${rl.name} ist der Titel ${rl.r6>=0?'stärker':'schwächer'} (${rl.r6>=0?'+':''}${fmt(rl.r6,1)} % über 6 Monate, Trend ${rl.strong?'aufwärts':'abwärts'})`);
+  if(fa){const p=[];
+    if(fa.pe!=null)p.push('KGV '+fmt(fa.pe,1));if(fa.pb!=null)p.push('KBV '+fmt(fa.pb,1));if(fa.ev!=null)p.push('EV/EBITDA '+fmt(fa.ev,1));
+    if(fa.gr!=null)p.push('Umsatzwachstum '+fmt(fa.gr,1)+' %');if(fa.nm!=null)p.push('Nettomarge '+fmt(fa.nm,1)+' %');
+    if(fa.de!=null)p.push('Schulden/Eigenkapital '+fmt(fa.de,0)+' %');if(fa.dy)p.push('Dividendenrendite '+fmt(fa.dy,1)+' %');
+    if(fa.hi&&fa.price)p.push(fmt((fa.price/fa.hi-1)*100,0)+' % zum 52-Wochen-Hoch');
+    parts.push(`fundamental ist das Bild ${fs>=2?'solide':fs<=-2?'angespannt':'gemischt'}${p.length?' ('+p.join(', ')+')':''}`)}
+  if(sn)parts.push(`in den Schlagzeilen überwiegen ${sn.s>0?'positive':sn.s<0?'negative':'gemischte'} Meldungen (${sn.p} positiv, ${sn.n} negativ von ${sn.t})`);
+  const t4=parts.length?parts.join('; ').replace(/^./,c=>c.toUpperCase())+'.':'';
+  let t6='';const bt=ex.bt;
+  if(bt){const h=bt.hz[0],c=h[bt.cur],cl={k:'konstruktiv',ne:'neutral',v:'vorsichtig'}[bt.cur];
+    if(c.n>=15){const edge=bt.cur==='k'?(c.avg>h.all.avg+0.5&&c.hit>h.all.hit):bt.cur==='v'?(c.avg<h.all.avg-0.5&&c.hit<h.all.hit):null;
+      t6=`Im Backtest (${fmt(bt.yrs,1)} Jahre, nur Technik) brachte das aktuelle Tagessignal „${cl}“ nach ${h.H} Handelstagen im Schnitt ${fmt(c.avg,1)} % (Trefferquote ${fmt(c.hit,0)} %, ${c.n} Fälle) gegenüber ${fmt(h.all.avg,1)} % an allen Tagen`+(edge===null?'; neutrale Phasen liefern kein Signal.':edge?' – ein historischer Vorteil, aber kein Garant.':' – kein belastbarer Vorteil.')}
+    else t6=`Im Backtest gab es für das aktuelle Signal zu wenige vergleichbare Fälle (${c.n}).`}
+  const t5=`Gesamteinschätzung: <b class="${cls}">${lab}</b> (regelbasiert, keine Anlageberatung).`;
+  return{lab,cls,html:[t1,t2,t3,t4,t6,t5].filter(Boolean).join(' ')};
 }
 /* ---------- Charts ---------- */
 function destroyCharts(){charts.forEach(c=>{try{c.ro.disconnect();c.ch.remove()}catch(e){}});charts=[]}
@@ -295,9 +367,66 @@ function renderChips(){
   $('#tf').innerHTML=TFS.map(([v,l])=>`<button class="${tf===v?'on':''}" data-act="tf" data-sym="${v}">${l}</button>`).join('');
   $('#b-cur').textContent=cur;$('#b-th').textContent=theme==='light'?'Dark':'Light';
 }
+function benchOf(a){
+  if(a.crypto)return a.symbol==='BTCUSDT'?{symbol:'^GSPC',name:'S&P 500',src:'yahoo',crypto:false}:{symbol:'BTCUSDT',name:'Bitcoin',crypto:true};
+  if(a.src==='yahoo')return /\.(DE|F|SG|MU|DU|HM|BE)$/.test(a.symbol)?{symbol:'^GDAXI',name:'DAX',src:'yahoo',crypto:false}:{symbol:'^GSPC',name:'S&P 500',src:'yahoo',crypto:false};
+  return null;
+}
+async function history(a){
+  const k='H|'+a.symbol,c=cache.get(k);if(c&&Date.now()-c.t<432e5)return c.d;
+  let d;
+  if(a.crypto){let end=Date.now(),all=[];
+    for(let i=0;i<3;i++){const j=await getJSON(`https://api.binance.com/api/v3/klines?symbol=${a.symbol}&interval=1d&limit=1000&endTime=${end}`);if(!j.length)break;all=j.concat(all);end=j[0][0]-1;if(j.length<1000)break}
+    d=all.map(x=>({time:Math.floor(x[0]/1000),close:+x[4]}));
+  }else if(a.src==='yahoo'){
+    const j=await yChart(a.symbol,'1d','10y'),r=j.chart&&j.chart.result&&j.chart.result[0];
+    if(!r||!r.timestamp)throw new Error('Keine Historie');
+    const cl=r.indicators.quote[0].close;d=[];r.timestamp.forEach((t,i)=>{if(cl[i]!=null)d.push({time:t,close:cl[i]})});
+  }else d=(await candles(a,'1d')).map(x=>({time:x.time,close:x.close}));
+  d=d.filter((x,i)=>isFinite(x.close)&&(i===0||x.time>d[i-1].time));
+  cache.set(k,{t:Date.now(),d});return d;
+}
+function btSeries(d){
+  const c=d.map(x=>x.close),n=c.length,e50=ema(c,50),e200=ema(c,200),e12=ema(c,12),e26=ema(c,26),m=e12.map((v,i)=>v-e26[i]),sg=ema(m,9);
+  const rs=new Array(n).fill(null);let g=0,l=0;
+  for(let i=1;i<=14&&i<n;i++){const df=c[i]-c[i-1];df>=0?g+=df:l-=df}g/=14;l/=14;if(n>14)rs[14]=l===0?100:100-100/(1+g/l);
+  for(let i=15;i<n;i++){const df=c[i]-c[i-1];g=(g*13+Math.max(df,0))/14;l=(l*13+Math.max(-df,0))/14;rs[i]=l===0?100:100-100/(1+g/l)}
+  const sc=new Array(n).fill(null);
+  for(let i=200;i<n;i++){let q=0;const a=c[i]>e200[i],b=e50[i]>e200[i];
+    if(a&&b)q+=2;else if(!a&&!b)q-=2;
+    q+=(m[i]-sg[i])>=0?1:-1;
+    if(rs[i]>70)q--;else if(rs[i]<30)q++;
+    for(let j=i;j>i-20;j--){const x=e50[j]-e200[j],y=e50[j-1]-e200[j-1];if(x>0&&y<=0){q++;break}if(x<0&&y>=0){q--;break}}
+    sc[i]=q}
+  return sc;
+}
+const sts=a=>a.length?{n:a.length,avg:a.reduce((x,y)=>x+y,0)/a.length*100,hit:a.filter(x=>x>0).length/a.length*100}:{n:0,avg:null,hit:null};
+function backtest(d,crypto){
+  const n=d.length;if(n<320)return null;
+  const sc=btSeries(d),si=sc[n-1];if(si==null)return null;
+  const out={yrs:(n-200)/(crypto?365:252),hz:[],cur:si>=3?'k':si<=-3?'v':'ne'};
+  for(const H of crypto?[30,91]:[20,63]){
+    const b={k:[],ne:[],v:[],all:[]};
+    for(let i=200;i<n-H;i++){const r=d[i+H].close/d[i].close-1,q=sc[i];(q>=3?b.k:q<=-3?b.v:b.ne).push(r);b.all.push(r)}
+    out.hz.push({H,k:sts(b.k),ne:sts(b.ne),v:sts(b.v),all:sts(b.all)});
+  }
+  return out;
+}
+function relStrength(da,db,crypto){
+  if(!da||!db||da.length<70||db.length<70)return null;
+  const bd=db.map(x=>Math.floor(x.time/86400)),rt=[];let p=0;
+  for(const x of da){const dy=Math.floor(x.time/86400);while(p+1<db.length&&bd[p+1]<=dy)p++;if(bd[p]<=dy&&dy-bd[p]<=5)rt.push(x.close/db[p].close)}
+  if(rt.length<70)return null;
+  const N=crypto?[91,182,365]:[63,126,252],R=n=>rt.length>n?(rt[rt.length-1]/rt[rt.length-1-n]-1)*100:null;
+  const sma=rt.slice(-50).reduce((x,y)=>x+y,0)/50;
+  return{r3:R(N[0]),r6:R(N[1]),r12:R(N[2]),strong:rt[rt.length-1]>sma};
+}
 async function load(a){
+  const ex=[(!a.crypto&&a.src==='yahoo')?fundamentals(a).catch(()=>null):Promise.resolve(null),(a.crypto||a.src==='yahoo')?news(a).catch(()=>null):Promise.resolve(null)];
+  const B=benchOf(a),wkP=tf==='1w'?null:candles(a,'1w').catch(()=>null),bnP=B?candles(B,'1d').catch(()=>null):null,hiP=history(a).catch(()=>null);
   try{const d=await candles(a,tf);let daily=d;if(tf!=='1d')try{daily=await candles(a,'1d')}catch(e){daily=null}
-    return{a,d,daily}}catch(e){return{a,err:e.message}}
+    const [fa,nw,wk,bn,hi]=await Promise.all([...ex,wkP,bnP,hiP]);
+    return{a,d,daily,fa,nw,wk:tf==='1w'?d:wk,bn,hi,B}}catch(e){return{a,err:e.message}}
 }
 async function render(){
   const my=++token;destroyCharts();
@@ -316,7 +445,25 @@ async function render(){
     const d=r.d.map(sc),an=analyze(d),st=setup(a,an,f),s=cur==='EUR'?'€':'$';
     if(r.daily)dailies.push({a,m:retsByDay(r.daily)});
     let vol=null;if(r.daily&&r.daily.length>40)vol=stats(r.daily.map(sc),a.crypto);
-    const vd=verdict(an,st,vol,s);
+    const dd=tf==='1d'?an:(r.daily?analyze(r.daily.map(sc)):null),ww=tf==='1w'?an:(r.wk?analyze(r.wk.map(sc)):null);
+    const mtf=dd&&ww&&dd.enough&&ww.enough?{d:dd,w:ww}:null;
+    const rs0=r.B&&r.daily&&r.bn?relStrength(r.daily,r.bn,a.crypto):null,rsx=rs0?{...rs0,name:r.B.name}:null;
+    const bt=r.hi?backtest(r.hi,a.crypto):null;
+    const vd=verdict(an,st,vol,s,r.fa,r.nw,{mtf,rs:rsx,bt});
+    const LB={up:'Aufwärtstrend',dn:'Abwärtstrend',wa:'Übergangsphase'};
+    const mtfRow=mtf?`<dt>Mehrzeitebenen<button class="i" data-info="mtf">?</button></dt><dd>Tag ${dd.arrow} · Woche ${ww.arrow}<br><span class="${dd.cls===ww.cls&&dd.cls!=='wa'?dd.cls:'wa'}">${dd.cls===ww.cls?(dd.cls==='wa'?'beide ohne Richtung':'übereinstimmend'):'widersprüchlich'}</span></dd>`:'';
+    const rsRow=rsx?`<dt>Rel. Stärke vs ${esc(rsx.name)}<button class="i" data-info="rs">?</button></dt><dd>${[['3 Mon',rsx.r3],['6 Mon',rsx.r6],['1 J',rsx.r12]].filter(x=>x[1]!=null).map(([l,v])=>`${l} <span class="${v>=0?'up':'dn'}">${v>=0?'+':''}${fmt(v,1)} %</span>`).join(' · ')}<br><span class="${rsx.strong?'up':'dn'}">${rsx.strong?'Trend: stärker':'Trend: schwächer'}</span></dd>`:'';
+    const BL={k:'konstruktiv',ne:'neutral',v:'vorsichtig'};
+    const btHtml=bt?`<details style="margin-top:8px;font-size:.78rem"><summary><b>Backtest Technik-Signal (${fmt(bt.yrs,1)} Jahre)</b><button class="i" data-info="bt">?</button></summary><table style="margin-top:6px"><tr><th>Signal</th>${bt.hz.map(h=>`<th>${h.H} T Ø / Treffer</th>`).join('')}<th>n</th></tr>`+['k','ne','v','all'].map(k=>`<tr${k===bt.cur?' style="font-weight:700"':''}><td>${k==='all'?'alle Tage':BL[k]}</td>${bt.hz.map(h=>`<td>${h[k].n?fmt(h[k].avg,1)+' % / '+fmt(h[k].hit,0)+' %':'–'}</td>`).join('')}<td>${bt.hz[0][k].n}</td></tr>`).join('')+`</table><div class="mu" style="margin-top:4px">Nur Technik-Score, ohne Gebühren, überlappende Zeiträume. Fettgedruckt = aktuelles Signal. Vergangenheit ist keine Garantie.</div></details>`:'';
+    const fr=(l,v)=>v==null?'':`<dt>${l}</dt><dd>${v}</dd>`;
+    let fundRows='';
+    if(a.crypto)fundRows=fr('Fundamental','<span class="mu">n. a. (Krypto)</span>');
+    else if(a.src==='yahoo'){const f=r.fa;fundRows=f?`<dt>Fundamental<button class="i" data-info="fa">?</button></dt><dd class="mu">zuletzt gemeldet (Yahoo)</dd>`+fr('KGV / KBV / KUV',[f.pe,f.pb,f.ps].map(v=>v==null?'–':fmt(v,1)).join(' / '))+fr('EV/EBITDA',f.ev==null?null:fmt(f.ev,1))+fr('Umsatzwachstum',f.gr==null?null:`<span class="${f.gr>=0?'up':'dn'}">${fmt(f.gr,1)} %</span>`)+fr('Nettomarge',f.nm==null?null:`<span class="${f.nm>=0?'up':'dn'}">${fmt(f.nm,1)} %</span>`)+fr('Schulden/Eigenkapital',f.de==null?null:fmt(f.de,0)+' %')+fr('Dividendenrendite',f.dy==null?null:fmt(f.dy,2)+' %')+fr('52-Wochen-Spanne',f.hi&&f.lo&&f.price?`${fmt((f.price/f.hi-1)*100,0)} % vom Hoch · ${fmt((f.price/f.lo-1)*100,0)} % über Tief`:null):fr('Fundamental','<span class="mu">nicht verfügbar</span>')}
+    let newsHtml='';
+    if(r.nw&&r.nw.length){const sn=sentiment(r.nw);
+      const ago=t=>{const h=Math.round((Date.now()/1000-t)/3600);return h<1?'gerade eben':h<48?`vor ${h} h`:`vor ${Math.round(h/24)} Tagen`};
+      newsHtml=`<details style="margin-top:8px;font-size:.78rem"><summary><b>Nachrichten (${r.nw.length})</b><button class="i" data-info="news">?</button> <span class="mu">Stimmung: <b class="${sn.s>0?'up':sn.s<0?'dn':'wa'}">${sn.s>0?'positiv':sn.s<0?'negativ':'gemischt'}</b></span></summary>`+r.nw.slice(0,6).map(x=>`<div style="margin:6px 0"><a href="${/^https?:\/\//.test(x.l||'')?esc(x.l):'#'}" target="_blank" rel="noopener noreferrer" style="color:var(--ac)">${esc(x.t||'')}</a><div class="mu">${esc(x.p||'')} · ${x.ts?ago(x.ts):''}</div></div>`).join('')+'</details>';
+    }else if(a.crypto||a.src==='yahoo')newsHtml='<div class="mu" style="margin-top:8px">Keine Nachrichten verfügbar.</div>';
     let scen='<span class="mu">Tagesdaten nicht verfügbar</span>';
     if(r.daily&&r.daily.length>40){const {sd,ann}=stats(r.daily.map(sc),a.crypto);
       const H=a.crypto?[['1 Mon',30],['6 Mon',182],['1 Jahr',365],['2 Jahre',730],['3 Jahre',1095]]:[['1 Mon',21],['6 Mon',126],['1 Jahr',252],['2 Jahre',504],['3 Jahre',756]];
@@ -341,8 +488,8 @@ async function render(){
       <dt>ATR (14)<button class="i" data-info="atr">?</button></dt><dd>${s}${fmt(an.atr)} (${fmt(an.atr/an.last*100,2)} %)</dd>
       <dt>Support / Resistance<button class="i" data-info="sr">?</button></dt><dd>${an.sup?s+fmt(an.sup):'–'} / ${an.res?s+fmt(an.res):'–'}</dd>
       <dt>Fibonacci (Szenario)<button class="i" data-info="fib">?</button></dt><dd>${an.fib.map(x=>s+fmt(x.v)).join(' · ')}</dd>
-      <dt>Spanne 1σ<button class="i" data-info="scen">?</button></dt><dd>${scen}</dd>
-    </dl>
+      <dt>Spanne 1σ<button class="i" data-info="scen">?</button></dt><dd>${scen}</dd>${mtfRow}${rsRow}${fundRows}
+    </dl>${newsHtml}${btHtml}
     <div class="setup"><b>Trade-Setup (${st.dir})</b><button class="i" data-info="crv">?</button> <span class="mu">${st.auto?'automatisch: Stop 2 ATR, Ziel nächste Resistance':'manuell'}</span>
       <div class="in" data-sym="${esc(a.symbol)}" data-f="${f}">
         <div><label>Entry</label><input type="number" step="any" data-k="entry" value="${+st.entry.toPrecision(7)}"></div>
