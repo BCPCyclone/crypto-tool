@@ -96,6 +96,7 @@ table{border-collapse:collapse;font-size:.75rem;width:100%}td,th{padding:4px 6px
     <button id="s-cp">Worker-Code kopieren</button></details>
   <div class="fg"><label>Kapital (in Anzeigewährung)</label><input id="s-cap" type="number" min="0"></div>
   <div class="fg"><label>Risiko pro Trade (%)</label><input id="s-r" type="number" step="0.1" min="0.1"></div>
+  <div class="fg"><label>Automatische Aktualisierung</label><select id="s-ar"><option value="0">Aus (nur per ⟳)</option><option value="5">alle 5 Minuten</option><option value="15">alle 15 Minuten</option></select></div>
   <div class="row" style="justify-content:flex-end"><button data-close>Abbrechen</button><button class="pri" id="s-ok">Speichern</button></div></div></div>
 
 <div class="mo" id="m-inf"><div class="mc"><h3 id="inf-t"></h3><p id="inf-b" style="font-size:.85rem;line-height:1.5;margin-bottom:14px"></p>
@@ -162,7 +163,7 @@ const INFO={
 const DEF=[{symbol:'BTCUSDT',name:'Bitcoin',crypto:true,curr:'USD'},{symbol:'ETHUSDT',name:'Ethereum',crypto:true,curr:'USD'},{symbol:'SOLUSDT',name:'Solana',crypto:true,curr:'USD'}];
 let assets=LS.get('qt7_assets',DEF),sel=LS.get('qt7_sel',[assets[0]?.symbol]).filter(Boolean),tf=LS.get('qt7_tf','1d'),cur=LS.get('qt7_cur','EUR'),theme=LS.get('qt7_theme','light');
 let cfg=LS.get('qt7_cfg',{key:'',capital:10000,risk:1}),setups=LS.get('qt7_setups',{}),alerts=LS.get('qt7_alerts',[]);
-let fx={r:0.92,live:false,ts:''},token=0,charts=[],cache=new Map();
+let busy=false,arT,fx={r:0.92,live:false,ts:''},token=0,charts=[],cache=new Map();
 const TFS=[['1h','1H'],['4h','4H'],['1d','1T'],['1w','1W']];
 
 /* ---------- Helfer ---------- */
@@ -172,7 +173,7 @@ function toast(m){const d=document.createElement('div');d.textContent=m;$('#toas
 const open=id=>$(id).classList.add('open'),close=()=>document.querySelectorAll('.mo').forEach(m=>m.classList.remove('open'));
 const factor=a=>a.curr===cur?1:(a.curr==='USD'?fx.r:1/fx.r);
 const sym=cur==='EUR'?'€':'$';
-async function getJSON(u){const r=await fetch(u,{signal:AbortSignal.timeout?AbortSignal.timeout(15000):undefined});
+async function getJSON(u){const r=await fetch(u,{signal:AbortSignal.timeout?AbortSignal.timeout(10000):undefined});
   if(r.status===401||r.status===403)throw new Error('API-Key ungültig oder nicht berechtigt (⚙ prüfen)');
   if(r.status===429)throw new Error('Rate-Limit erreicht, kurz warten');
   if(!r.ok){let m='';try{m=(await r.json()).message}catch(e){}throw new Error(m?m.slice(0,160):'HTTP '+r.status)}return r.json()}
@@ -421,22 +422,23 @@ function relStrength(da,db,crypto){
   const sma=rt.slice(-50).reduce((x,y)=>x+y,0)/50;
   return{r3:R(N[0]),r6:R(N[1]),r12:R(N[2]),strong:rt[rt.length-1]>sma};
 }
+const soft=(p,ms=8000)=>Promise.race([p,new Promise(r=>setTimeout(()=>r(null),ms))]);
 async function load(a){
   const ex=[(!a.crypto&&a.src==='yahoo')?fundamentals(a).catch(()=>null):Promise.resolve(null),(a.crypto||a.src==='yahoo')?news(a).catch(()=>null):Promise.resolve(null)];
   const B=benchOf(a),wkP=tf==='1w'?null:candles(a,'1w').catch(()=>null),bnP=B?candles(B,'1d').catch(()=>null):null,hiP=history(a).catch(()=>null);
   try{const d=await candles(a,tf);let daily=d;if(tf!=='1d')try{daily=await candles(a,'1d')}catch(e){daily=null}
-    const [fa,nw,wk,bn,hi]=await Promise.all([...ex,wkP,bnP,hiP]);
+    const [fa,nw,wk,bn,hi]=await Promise.all([...ex,wkP,bnP,hiP].map(p=>soft(p)));
     return{a,d,daily,fa,nw,wk:tf==='1w'?d:wk,bn,hi,B}}catch(e){return{a,err:e.message}}
 }
 async function render(){
-  const my=++token;destroyCharts();
-  document.querySelectorAll('.asset-card').forEach(e=>e.remove());
+  const my=++token;busy=true;
   renderChips();
   const act=sel.map(s=>assets.find(a=>a.symbol===s)).filter(Boolean);
   $('#status').textContent=act.length?'Lade Marktdaten …':'Wähle oben ein Asset aus oder füge eins hinzu.';
   if(typeof LightweightCharts==='undefined'){$('#status').textContent='Chart-Bibliothek konnte nicht geladen werden (Internet?).';return}
   const res=await Promise.all(act.map(load));
   if(my!==token)return;
+  destroyCharts();document.querySelectorAll('.asset-card').forEach(e=>e.remove());
   const ban=[],dailies=[];let src=[];
   res.forEach(r=>{
     const a=r.a,card=document.createElement('div');card.className='card asset-card';
@@ -505,9 +507,9 @@ async function render(){
     mkChart(card.querySelector('.ch'),d,an,st);
     checkAlerts(a,r.d[r.d.length-1].close);
   });
-  $('#status').textContent=act.length?`Währung: ${cur} (EUR/USD ${fmt(fx.r,4)}${fx.live?' live, '+fx.ts:' – Fallback, nicht live'}) · Auto-Update alle 60 s`:'Wähle oben ein Asset aus oder füge eins hinzu.';
+  $('#status').textContent=act.length?`Währung: ${cur} (EUR/USD ${fmt(fx.r,4)}${fx.live?' live, '+fx.ts:' – Fallback, nicht live'}) · Auto-Update: ${cfg.auto?cfg.auto+' Min':'aus'}`:'Wähle oben ein Asset aus oder füge eins hinzu.';
   $('#ban').innerHTML='CRV:&nbsp;'+(ban.join(' &nbsp;·&nbsp; ')||'–');
-  renderCorr(dailies);
+  renderCorr(dailies);busy=false;
 }
 function renderCorr(ds){
   const box=$('#corr');if(ds.length<2){box.style.display='none';return}
@@ -562,8 +564,8 @@ $('#b-cur').onclick=async()=>{cur=cur==='EUR'?'USD':'EUR';LS.set('qt7_cur',cur);
 $('#b-th').onclick=()=>{theme=theme==='light'?'dark':'light';LS.set('qt7_theme',theme);document.body.dataset.theme=theme;render()};
 $('#b-ref').onclick=()=>{cache.clear();loadFx().then(()=>{render();loadMacro()})};
 $('#b-add').onclick=()=>{$('#a-e').textContent='';open('#m-add')};
-$('#b-set').onclick=()=>{$('#s-k').value=cfg.key;$('#s-p').value=cfg.proxy||'';$('#s-cap').value=cfg.capital;$('#s-r').value=cfg.risk;open('#m-set')};
-$('#s-ok').onclick=()=>{cfg={key:$('#s-k').value.trim(),proxy:$('#s-p').value.trim().replace(/\/+$/,''),capital:Math.max(0,+$('#s-cap').value||0),risk:Math.max(.1,+$('#s-r').value||1)};LS.set('qt7_cfg',cfg);cache.clear();close();render()};
+$('#b-set').onclick=()=>{$('#s-k').value=cfg.key;$('#s-p').value=cfg.proxy||'';$('#s-cap').value=cfg.capital;$('#s-r').value=cfg.risk;$('#s-ar').value=cfg.auto||0;open('#m-set')};
+$('#s-ok').onclick=()=>{cfg={key:$('#s-k').value.trim(),proxy:$('#s-p').value.trim().replace(/\/+$/,''),capital:Math.max(0,+$('#s-cap').value||0),risk:Math.max(.1,+$('#s-r').value||1),auto:+$('#s-ar').value||0};LS.set('qt7_cfg',cfg);cache.clear();close();setAuto();render()};
 let found=[];
 const aErr=m=>$('#a-e').textContent=m;
 async function addAsset(a){
@@ -611,7 +613,7 @@ $('#a-ok').onclick=async()=>{
 };
 document.querySelectorAll('.mo').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)close()}));
 document.addEventListener('keydown',e=>{if(e.key==='Escape')close()});
-setInterval(()=>{if(document.hidden||document.querySelector('.mo.open')||document.activeElement?.tagName==='INPUT')return;render()},60000);
+function setAuto(){clearInterval(arT);if(cfg.auto>0)arT=setInterval(()=>{if(busy||document.hidden||document.querySelector('.mo.open')||document.activeElement?.tagName==='INPUT')return;render()},cfg.auto*60000)}
 setInterval(loadMacro,300000);
 
 document.body.dataset.theme=theme;
@@ -629,7 +631,7 @@ function loadLib(){
     next(0);
   });
 }
-(async()=>{await Promise.all([loadLib(),loadFx()]);render();loadMacro()})();
+(async()=>{await Promise.all([loadLib(),loadFx()]);setAuto();render();loadMacro()})();
 </script>
 </body>
 </html>
