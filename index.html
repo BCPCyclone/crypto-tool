@@ -92,7 +92,7 @@ table{border-collapse:collapse;font-size:.75rem;width:100%}td,th{padding:4px 6px
   <div class="fg"><label>Twelve-Data API-Key (für Aktien, bleibt nur in diesem Browser)</label><input id="s-k" type="password" autocomplete="off"></div>
   <div class="fg"><label>Eigener Yahoo-Proxy (optional, stabiler) – Worker-URL</label><input id="s-p" type="url" autocomplete="off" placeholder="https://…workers.dev"></div>
   <details class="mu" style="margin-bottom:10px"><summary>Eigenen Proxy einrichten</summary>
-    <div style="margin:6px 0;line-height:1.5">1. Konto auf dash.cloudflare.com anlegen.<br>2. Workers &amp; Pages → Create → Create Worker → Deploy → Edit code.<br>3. Alten Code löschen, den kopierten Code einfügen, Deploy.<br>4. Die Worker-URL oben eintragen.</div>
+    <div style="margin:6px 0;line-height:1.5">1. Konto auf dash.cloudflare.com anlegen.<br>2. Workers &amp; Pages → Create → Create Worker → Deploy → Edit code.<br>3. Alten Code löschen, den kopierten Code (Version 3) einfügen, Deploy. Nach App-Updates den Code erneut einfügen.<br>4. Die Worker-URL oben eintragen.</div>
     <button id="s-cp">Worker-Code kopieren</button></details>
   <div class="fg"><label>Kapital (in Anzeigewährung)</label><input id="s-cap" type="number" min="0"></div>
   <div class="fg"><label>Risiko pro Trade (%)</label><input id="s-r" type="number" step="0.1" min="0.1"></div>
@@ -103,19 +103,39 @@ table{border-collapse:collapse;font-size:.75rem;width:100%}td,th{padding:4px 6px
   <div class="row" style="justify-content:flex-end"><button class="pri" data-close>Verstanden</button></div></div></div>
 
 <script type="text/plain" id="wk-src">
-// Cloudflare Worker: CORS-Proxy für Yahoo Finance (/chart, /search, /fund)
+// Cloudflare Worker v3: CORS-Proxy für Yahoo Finance (/chart, /search, /fund, /summary)
+const UA = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36' };
+const MODS = 'financialData,recommendationTrend,calendarEvents,earningsTrend,defaultKeyStatistics,upgradeDowngradeHistory,netSharePurchaseActivity';
+let AUTH = { c: '', k: '', t: 0 };
+
+async function auth(force) {
+  if (!force && AUTH.k && Date.now() - AUTH.t < 3600000) return AUTH;
+  const r1 = await fetch('https://fc.yahoo.com', { headers: UA, redirect: 'manual' });
+  const list = r1.headers.getSetCookie ? r1.headers.getSetCookie() : [r1.headers.get('set-cookie') || ''];
+  const cookie = list.map(x => x.split(';')[0]).filter(Boolean).join('; ');
+  if (!cookie) throw new Error('kein Cookie von Yahoo');
+  const r2 = await fetch('https://query1.finance.yahoo.com/v1/test/getcrumb', { headers: { ...UA, Cookie: cookie } });
+  const crumb = (await r2.text()).trim();
+  if (!r2.ok || !crumb || crumb.length > 40 || /[<\s]/.test(crumb)) throw new Error('kein Crumb (HTTP ' + r2.status + ')');
+  AUTH = { c: cookie, k: crumb, t: Date.now() };
+  return AUTH;
+}
+
 export default {
   async fetch(req) {
     const u = new URL(req.url);
     const cors = { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' };
     // Optional: '*' durch deine GitHub-Pages-Adresse ersetzen, z. B. 'https://DEINNAME.github.io'
-    const bad = () => new Response('{"error":"bad request"}', { status: 400, headers: cors });
+    const err = (code, msg) => new Response(JSON.stringify({ error: msg, message: msg }), { status: code, headers: cors });
     const sym = u.searchParams.get('symbol') || '';
+    const okSym = /^[A-Za-z0-9.^=-]{1,20}$/.test(sym);
     let target;
-    if (u.pathname === '/chart') {
+    if (u.pathname === '/') {
+      return new Response('{"ok":true,"version":3}', { headers: cors });
+    } else if (u.pathname === '/chart') {
       const i = u.searchParams.get('interval') || '1d';
       const r = u.searchParams.get('range') || '1y';
-      if (!/^[A-Za-z0-9.^=-]{1,20}$/.test(sym) || !/^[0-9a-z]{2,4}$/.test(i) || !/^[0-9a-z]{2,4}$/.test(r)) return bad();
+      if (!okSym || !/^[0-9a-z]{2,4}$/.test(i) || !/^[0-9a-z]{2,4}$/.test(r)) return err(400, 'bad request');
       const ev = u.searchParams.get('ev') ? '&events=div' : '';
       target = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=${i}&range=${r}${ev}`;
     } else if (u.pathname === '/search') {
@@ -125,12 +145,25 @@ export default {
     } else if (u.pathname === '/fund') {
       const t = u.searchParams.get('types') || '';
       const p1 = u.searchParams.get('p1') || '', p2 = u.searchParams.get('p2') || '';
-      if (!/^[A-Za-z0-9.^=-]{1,20}$/.test(sym) || !/^[A-Za-z,]{1,400}$/.test(t) || !/^\d{9,10}$/.test(p1) || !/^\d{9,10}$/.test(p2)) return bad();
+      if (!okSym || !/^[A-Za-z,]{1,400}$/.test(t) || !/^\d{9,10}$/.test(p1) || !/^\d{9,10}$/.test(p2)) return err(400, 'bad request');
       target = `https://query2.finance.yahoo.com/ws/fundamentals-timeseries/v1/finance/timeseries/${encodeURIComponent(sym)}?type=${t}&period1=${p1}&period2=${p2}`;
+    } else if (u.pathname === '/summary') {
+      if (!okSym) return err(400, 'bad request');
+      try {
+        for (let n = 0; n < 2; n++) {
+          const a = await auth(n > 0);
+          const r = await fetch(`https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(sym)}?modules=${MODS}&crumb=${encodeURIComponent(a.k)}`, { headers: { ...UA, Cookie: a.c } });
+          if (r.status === 401 || r.status === 403) { AUTH.k = ''; continue; }
+          return new Response(r.body, { status: r.status, headers: cors });
+        }
+        return err(502, 'Yahoo-Login fehlgeschlagen');
+      } catch (e) {
+        return err(502, 'auth: ' + (e.message || e));
+      }
     } else {
-      return new Response('{"error":"not found"}', { status: 404, headers: cors });
+      return err(404, 'not found');
     }
-    const r = await fetch(target, { headers: { 'User-Agent': 'Mozilla/5.0' }, cf: { cacheTtl: 60, cacheEverything: true } });
+    const r = await fetch(target, { headers: UA, cf: { cacheTtl: 60, cacheEverything: true } });
     return new Response(r.body, { status: r.status, headers: cors });
   }
 };
@@ -154,6 +187,7 @@ const INFO={
  fund:['Funding Rate (BTC Perp)','Gebühr zwischen Long- und Short-Händlern. Stark positiv = viele gehebelte Longs (Überhitzungsrisiko).'],
  dom:['BTC-Dominanz','Anteil von Bitcoin an der gesamten Kryptomarktkapitalisierung (CoinGecko).'],
  fx:['EUR/USD','Tageskurs der EZB via frankfurter.app, genutzt für die Währungsanzeige.'],
+ ay:['Analysten und Termine','Daten von Yahoo (Konsens der Analysten): Kursziel (Mittel, niedrigstes, höchstes), Empfehlung (1 = stark kaufen, 5 = verkaufen) mit Verteilung Stark kaufen/Kaufen/Halten/Verkaufen/Stark verkaufen, Termin der Quartalszahlen, Gewinn-pro-Aktie-Schätzungen, Insider-Aktivität der letzten 6 Monate und Anteil der leerverkauften Aktien. Kursziele liegen oft über dem Kurs und werden verzögert angepasst. Vor Quartalszahlen steigt das Kursrisiko deutlich.'],
  dist:['Risiko und historische Verteilung','Max. Drawdown = größter Rückgang vom Hoch zum Tief. Sharpe/Sortino = Rendite je Schwankungs- bzw. Abwärtsrisiko. VaR 95 % = Tagesverlust, der in 95 % der Tage nicht überschritten wurde, CVaR = Durchschnitt der schlechtesten 5 % Tage. Die Tabelle zeigt, wie sich der Kurs historisch nach 1 Monat bis 3 Jahren entwickelte (P10 = nur 10 % der Fälle waren schlechter, P90 = nur 10 % besser). Die Spalte Signal nutzt nur Tage mit demselben Technik-Signal wie heute. Zeiträume überlappen, bei langen Horizonten gibt es nur wenige unabhängige Fälle. Keine Prognose.'],
  season:['Saisonalität','Durchschnittliche Monatsrendite in der Vergangenheit für den aktuellen und den nächsten Kalendermonat, mit Anteil der Jahre im Plus. Saisonale Muster sind schwach und können verschwinden.'],
  vp:['Volumenprofil','Zeigt, auf welchen Preisniveaus in den letzten 250 Kerzen am meisten gehandelt wurde. POC = Preis mit dem höchsten Volumen. Value Area = Bereich mit etwa 70 % des Volumens. Der Kurs tendiert dazu, zu diesen Zonen zurückzukehren, und sie wirken oft als Unterstützung oder Widerstand.'],
@@ -323,7 +357,8 @@ function verdict(an,st,vol,s,fa,nw,ex){
   const ms=m?(m.d.cls==='up'&&m.w.cls==='up'?1:m.d.cls==='dn'&&m.w.cls==='dn'?-1:0):0;
   const rsc=rl&&rl.r6!=null?(rl.strong&&rl.r6>0?1:!rl.strong&&rl.r6<0?-1:0):0;
   const dfs=ex.dr&&ex.dr.fund!=null?(ex.dr.fund>0.03?-1:ex.dr.fund<-0.01?1:0):0;
-  const tot=sc+(fs||0)+(sn?sn.s:0)+ms+rsc+dfs;
+  const A=ex.ay,ays=A?(A.tm!=null?(A.up>15?1:A.up<-5?-1:0):0)+(A.rm!=null?(A.rm<=2.2?1:A.rm>=3.5?-1:0):0):0;
+  const tot=sc+(fs||0)+(sn?sn.s:0)+ms+rsc+dfs+ays;
   const lab=tot>=3?'konstruktiv':tot<=-3?'vorsichtig':'neutral',cls=tot>=3?'up':tot<=-3?'dn':'wa';
   const n=an.e200.length,d200=an.enough?(an.last/an.e200[n-1]-1)*100:null;
   const rsiL=an.rsi>70?'überkauft':an.rsi<30?'überverkauft':'neutral';
@@ -354,8 +389,13 @@ function verdict(an,st,vol,s,fa,nw,ex){
     t7=`Risikoprofil (${fmt(k.yrs,1)} Jahre Historie): maximaler Drawdown ${fmt(k.mdd,0)} %, aktuell ${fmt(k.dd,0)} % unter dem Hoch, Sharpe ${fmt(k.sharpe,2)}, Tages-VaR (95 %) ${fmt(k.var95,1)} %`+(d1&&d1.p50!=null?`; die 1-Jahres-Rendite lag historisch im Median bei ${fmt(d1.p50*100,0)} % (P10 ${fmt(d1.p10*100,0)} %, P90 ${fmt(d1.p90*100,0)} %)`:'')+'.'}
   let t8='';const dr=ex.dr;
   if(dr&&dr.fund!=null)t8=`Derivate: Das Funding liegt bei ${fmt(dr.fund,4)} % je 8 Stunden (${fmt(dr.fundAnn,0)} % p. a.)${dr.fund>0.03?' und deutet auf überhitzte Long-Positionen':dr.fund<-0.01?' und deutet auf überfüllte Short-Positionen':' und ist unauffällig'}`+(dr.oi7!=null?`, das Open Interest hat sich in 7 Tagen um ${fmt(dr.oi7,1)} % verändert`:'')+'.';
+  let t9='';
+  if(A){const p=[];
+    if(A.tm!=null)p.push(`Analysten sehen im Mittel ein Kursziel von ${s}${fmt(A.tm)} (${A.up>=0?'+':''}${fmt(A.up,0)} % zum Kurs${A.n?', '+A.n+' Analysten':''}${A.rkl?', Konsens „'+A.rkl+'“':''})`);
+    if(A.days!=null&&A.days>=0)p.push(`${p.length?'die':'Die'} nächsten Quartalszahlen stehen in ${A.days} Tagen an${A.days<=14?' und bergen kurzfristig erhöhtes Kursrisiko':''}`);
+    if(p.length)t9=p.join('; ')+'.'}
   const t5=`Gesamteinschätzung: <b class="${cls}">${lab}</b> (regelbasiert, keine Anlageberatung).`;
-  return{lab,cls,html:[t1,t2,t3,t4,t6,t7,t8,t5].filter(Boolean).join(' ')};
+  return{lab,cls,html:[t1,t2,t3,t4,t6,t7,t8,t9,t5].filter(Boolean).join(' ')};
 }
 /* ---------- Charts ---------- */
 function destroyCharts(){charts.forEach(c=>{try{c.ro.disconnect();c.ch.remove()}catch(e){}});charts=[]}
@@ -480,13 +520,33 @@ async function deriv(a){
   const t=v(tk);if(t){const t7=t.slice(-7);o.tk=t7.reduce((q,x)=>q+ +x.buySellRatio,0)/t7.length}
   const d=Object.keys(o).length?o:null;cache.set(k,{t:Date.now(),d});return d;
 }
+const RK={strong_buy:'Stark kaufen',buy:'Kaufen',hold:'Halten',underperform:'Untergewichten',sell:'Verkaufen'};
+async function analyst(a){
+  const k='A|'+a.symbol,c=cache.get(k);if(c&&Date.now()-c.t<(c.d.err?3e5:216e5))return c.d;
+  let d;
+  try{
+    const j=await getJSON(`${cfg.proxy}/summary?symbol=${E(a.symbol)}`);
+    const r=j.quoteSummary&&j.quoteSummary.result&&j.quoteSummary.result[0];
+    if(!r)throw new Error((j.quoteSummary&&j.quoteSummary.error&&j.quoteSummary.error.description)||j.message||'keine Daten');
+    const R=o=>o==null?null:(typeof o==='object'?(o.raw!=null?o.raw:null):o);
+    const fd=r.financialData||{},tr=((r.recommendationTrend||{}).trend||[])[0]||{},ce=r.calendarEvents||{},ks=r.defaultKeyStatistics||{},ns=r.netSharePurchaseActivity||{};
+    const now=Date.now()/1000,ed=(((ce.earnings||{}).earningsDate)||[]).map(R).filter(x=>x).find(x=>x>=now-86400)||null;
+    const et=(r.earningsTrend||{}).trend||[],est=p=>{const x=et.find(y=>y.period===p);return x&&x.earningsEstimate?{avg:R(x.earningsEstimate.avg),g:R(x.earningsEstimate.growth)}:null};
+    d={tm:R(fd.targetMeanPrice),th:R(fd.targetHighPrice),tl:R(fd.targetLowPrice),n:R(fd.numberOfAnalystOpinions),rm:R(fd.recommendationMean),rk:fd.recommendationKey,
+      tr:{sb:tr.strongBuy,b:tr.buy,h:tr.hold,s:tr.sell,ss:tr.strongSell},ed,q0:est('0q'),y0:est('0y'),y1:est('+1y'),si:R(ks.shortPercentOfFloat),
+      ins:{buy:R(ns.buyInfoCount),sell:R(ns.sellInfoCount),net:R(ns.netInfoShares)},
+      ud:(((r.upgradeDowngradeHistory||{}).history)||[]).slice(0,4).map(x=>({t:x.epochGradeDate,f:x.firm,to:x.toGrade,from:x.fromGrade,ac:x.action}))};
+    if(d.tm==null&&d.ed==null&&!d.n)d={err:'keine Analystendaten für diesen Titel'};
+  }catch(e){d={err:String(e.message||e).slice(0,90)}}
+  cache.set(k,{t:Date.now(),d});return d;
+}
 const soft=(p,ms=8000)=>Promise.race([p,new Promise(r=>setTimeout(()=>r(null),ms))]);
 async function load(a){
   const ex=[(!a.crypto&&a.src==='yahoo')?fundamentals(a).catch(()=>null):Promise.resolve(null),(a.crypto||a.src==='yahoo')?news(a).catch(()=>null):Promise.resolve(null)];
-  const drP=a.crypto?deriv(a).catch(()=>null):null,B=benchOf(a),wkP=tf==='1w'?null:candles(a,'1w').catch(()=>null),bnP=B?candles(B,'1d').catch(()=>null):null,hiP=history(a).catch(()=>null);
+  const ayP=(!a.crypto&&a.src==='yahoo'&&cfg.proxy)?analyst(a):null,drP=a.crypto?deriv(a).catch(()=>null):null,B=benchOf(a),wkP=tf==='1w'?null:candles(a,'1w').catch(()=>null),bnP=B?candles(B,'1d').catch(()=>null):null,hiP=history(a).catch(()=>null);
   try{const d=await candles(a,tf);let daily=d;if(tf!=='1d')try{daily=await candles(a,'1d')}catch(e){daily=null}
-    const [fa,nw,wk,bn,hi,dr]=await Promise.all([...ex,wkP,bnP,hiP,drP].map(p=>soft(p)));
-    return{a,d,daily,fa,nw,wk:tf==='1w'?d:wk,bn,hi,dr,B}}catch(e){return{a,err:e.message}}
+    const [fa,nw,wk,bn,hi,dr,ay]=await Promise.all([...ex,wkP,bnP,hiP,drP,ayP].map(p=>soft(p)));
+    return{a,d,daily,fa,nw,wk:tf==='1w'?d:wk,bn,hi,dr,ay,B}}catch(e){return{a,err:e.message}}
 }
 async function render(){
   const my=++token;busy=true;
@@ -510,7 +570,8 @@ async function render(){
     const rs0=r.B&&r.daily&&r.bn?relStrength(r.daily,r.bn,a.crypto):null,rsx=rs0?{...rs0,name:r.B.name}:null;
     const bt=r.hi?backtest(r.hi,a.crypto):null;
     const ax=r.hi?analytics(r.hi,a.crypto,bt?bt.cur:'ne'):null;
-    const vd=verdict(an,st,vol,s,r.fa,r.nw,{mtf,rs:rsx,bt,ax,dr:r.dr});
+    const ayx=r.ay&&!r.ay.err?{tm:r.ay.tm!=null?r.ay.tm*f:null,up:r.ay.tm!=null?(r.ay.tm*f/an.last-1)*100:null,n:r.ay.n,rm:r.ay.rm,rkl:RK[r.ay.rk]||'',days:r.ay.ed?Math.round((r.ay.ed-Date.now()/1000)/86400):null}:null;
+    const vd=verdict(an,st,vol,s,r.fa,r.nw,{mtf,rs:rsx,bt,ax,dr:r.dr,ay:ayx});
     const LB={up:'Aufwärtstrend',dn:'Abwärtstrend',wa:'Übergangsphase'};
     const mtfRow=mtf?`<dt>Mehrzeitebenen<button class="i" data-info="mtf">?</button></dt><dd>Tag ${dd.arrow} · Woche ${ww.arrow}<br><span class="${dd.cls===ww.cls&&dd.cls!=='wa'?dd.cls:'wa'}">${dd.cls===ww.cls?(dd.cls==='wa'?'beide ohne Richtung':'übereinstimmend'):'widersprüchlich'}</span></dd>`:'';
     const rsRow=rsx?`<dt>Rel. Stärke vs ${esc(rsx.name)}<button class="i" data-info="rs">?</button></dt><dd>${[['3 Mon',rsx.r3],['6 Mon',rsx.r6],['1 J',rsx.r12]].filter(x=>x[1]!=null).map(([l,v])=>`${l} <span class="${v>=0?'up':'dn'}">${v>=0?'+':''}${fmt(v,1)} %</span>`).join(' · ')}<br><span class="${rsx.strong?'up':'dn'}">${rsx.strong?'Trend: stärker':'Trend: schwächer'}</span></dd>`:'';
@@ -534,6 +595,27 @@ async function render(){
     const c=st.crv==null?'–':fmt(st.crv,2);
     ban.push(`${esc(a.name)}: <b class="${st.crv>=2?'up':st.crv<1?'dn':'wa'}">${c}</b>`);
     src.push(srcName(a));
+    let ayRows='',ayHtml='';
+    if(!a.crypto&&a.src==='yahoo'){
+      const AY='Analysten &amp; Termine';
+      if(!cfg.proxy)ayRows=fr(AY,'<span class="mu">benötigt eigenen Proxy (⚙)</span>');
+      else if(!r.ay)ayRows=fr(AY,'<span class="mu">wird nachgeladen, ⟳ tippen</span>');
+      else if(r.ay.err)ayRows=fr(AY,`<span class="mu">nicht verfügbar (${esc(r.ay.err)})</span>`);
+      else{const y=r.ay,up=y.tm!=null?(y.tm*f/an.last-1)*100:null;
+        const dtf=t=>new Date(t*1000).toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric'});
+        const days=y.ed?Math.round((y.ed-Date.now()/1000)/86400):null;
+        const trs=y.tr&&y.tr.sb!=null?`${y.tr.sb}/${y.tr.b}/${y.tr.h}/${y.tr.s}/${y.tr.ss}`:null;
+        const eps=[['Quartal',y.q0],['lfd. Jahr',y.y0],['Folgejahr',y.y1]].filter(x=>x[1]&&x[1].avg!=null).map(([l,x])=>`${l} ${fmt(x.avg,2)}${x.g!=null?' ('+(x.g>=0?'+':'')+fmt(x.g*100,0)+' %)':''}`).join('<br>');
+        ayRows=`<dt>Analysten<button class="i" data-info="ay">?</button></dt><dd class="mu">Yahoo${y.n?', '+y.n+' Analysten':''}</dd>`+
+          fr('Kursziel Ø',y.tm!=null?`${s}${fmt(y.tm*f)} <span class="${up>=0?'up':'dn'}">${up>=0?'+':''}${fmt(up,1)} %</span>`+(y.tl!=null&&y.th!=null?`<br><span class="mu">Spanne ${s}${fmt(y.tl*f)} – ${s}${fmt(y.th*f)}</span>`:''):null)+
+          fr('Empfehlung',y.rk&&y.rk!=='none'?`${RK[y.rk]||esc(y.rk)}${y.rm?' ('+fmt(y.rm,1)+' von 5)':''}${trs?'<br><span class="mu">SK/K/H/V/SV: '+trs+'</span>':''}`:null)+
+          fr('Quartalszahlen',y.ed?`${dtf(y.ed)}${days!=null?' (in '+days+' Tagen)':''}${days!=null&&days>=0&&days<=14?'<br><span class="wa">Zahlen stehen bald an: erhöhtes Kursrisiko</span>':''}`:null)+
+          fr('Gewinnschätzung (EPS)',eps||null)+
+          fr('Insider (6 Mon)',y.ins&&(y.ins.buy!=null||y.ins.sell!=null)?`${y.ins.buy||0} Käufe / ${y.ins.sell||0} Verkäufe${y.ins.net!=null?'<br><span class="'+(y.ins.net>=0?'up':'dn')+'">netto '+(y.ins.net>=0?'+':'')+fmt(y.ins.net,0)+' Aktien</span>':''}`:null)+
+          fr('Leerverkäufer',y.si!=null?fmt(y.si*100,1)+' % des Streubesitzes':null);
+        const AC={up:'hochgestuft',down:'herabgestuft',main:'bestätigt',init:'neu aufgenommen',reit:'bekräftigt'};
+        if(y.ud&&y.ud.length)ayHtml=`<details style="margin-top:8px;font-size:.78rem"><summary><b>Analystenänderungen</b></summary>`+y.ud.map(x=>`<div style="margin:5px 0">${x.t?dtf(x.t)+' · ':''}${esc(x.f||'')}: ${x.from?esc(x.from)+' → ':''}${esc(x.to||'')} <span class="mu">${AC[x.ac]||esc(x.ac||'')}</span></div>`).join('')+'</details>'}
+    }
     const MN=['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
     let seaRow='';
     if(ax){const mi=new Date().getUTCMonth();seaRow=`<dt>Saisonalität<button class="i" data-info="season">?</button></dt><dd>`+[mi,(mi+1)%12].map(m=>{const x=ax.season[m];return x?`${MN[m]} Ø <span class="${x.avg>=0?'up':'dn'}">${x.avg>=0?'+':''}${fmt(x.avg,1)} %</span> (${fmt(x.hit,0)} % Plus, ${x.n} J)`:`${MN[m]} –`}).join('<br>')+'</dd>'}
@@ -566,8 +648,8 @@ async function render(){
       <dt>ATR (14)<button class="i" data-info="atr">?</button></dt><dd>${s}${fmt(an.atr)} (${fmt(an.atr/an.last*100,2)} %)</dd>
       <dt>Support / Resistance<button class="i" data-info="sr">?</button></dt><dd>${an.sup?s+fmt(an.sup):'–'} / ${an.res?s+fmt(an.res):'–'}</dd>
       <dt>Fibonacci (Szenario)<button class="i" data-info="fib">?</button></dt><dd>${an.fib.map(x=>s+fmt(x.v)).join(' · ')}</dd>
-      <dt>Spanne 1σ<button class="i" data-info="scen">?</button></dt><dd>${scen}</dd>${mtfRow}${rsRow}${vpRow}${seaRow}${drRows}${fundRows}
-    </dl>${newsHtml}${btHtml}${axHtml}
+      <dt>Spanne 1σ<button class="i" data-info="scen">?</button></dt><dd>${scen}</dd>${mtfRow}${rsRow}${vpRow}${seaRow}${drRows}${fundRows}${ayRows}
+    </dl>${newsHtml}${ayHtml}${btHtml}${axHtml}
     <div class="setup"><b>Trade-Setup (${st.dir})</b><button class="i" data-info="crv">?</button> <span class="mu">${st.auto?'automatisch: Stop 2 ATR, Ziel nächste Resistance':'manuell'}</span>
       <div class="in" data-sym="${esc(a.symbol)}" data-f="${f}">
         <div><label>Entry</label><input type="number" step="any" data-k="entry" value="${+st.entry.toPrecision(7)}"></div>
@@ -578,7 +660,7 @@ async function render(){
       ${st.size&&st.size*st.entry>cfg.capital?'<br><span class="wa">Positionswert übersteigt Kapital (Hebel nötig)</span>':''}
       ${an.rsi&&an.cls==='dn'&&st.dir==='Long'?'<br><span class="wa">Long gegen den Abwärtstrend</span>':''}
       <button data-act="reset" data-sym="${esc(a.symbol)}" style="margin-top:6px">Auto-Werte</button></div></div>
-    <div class="mu" style="margin-top:8px">Stand: ${hhmm(Date.now())} · Letzte Kerze vor ${age} h · Quelle: ${srcName(a)} · ${tf.toUpperCase()}<br>Zusatzdaten: ${[...(a.crypto?[['Derivate',r.dr]]:[['Fundamental',r.fa]]),['News',r.nw&&r.nw.length],['Wochentrend',mtf],['Benchmark',rsx],['Backtest',bt],['Risiko/Verteilung',ax]].map(([l,v])=>`<span class="${v?'up':'dn'}">${v?'✓':'✗'}</span> ${l}`).join(' · ')}</div>`;
+    <div class="mu" style="margin-top:8px">Stand: ${hhmm(Date.now())} · Letzte Kerze vor ${age} h · Quelle: ${srcName(a)} · ${tf.toUpperCase()}<br>Zusatzdaten: ${[...(a.crypto?[['Derivate',r.dr]]:[['Fundamental',r.fa]]),...(!a.crypto&&cfg.proxy&&a.src==='yahoo'?[['Analysten',r.ay&&!r.ay.err]]:[]),['News',r.nw&&r.nw.length],['Wochentrend',mtf],['Benchmark',rsx],['Backtest',bt],['Risiko/Verteilung',ax]].map(([l,v])=>`<span class="${v?'up':'dn'}">${v?'✓':'✗'}</span> ${l}`).join(' · ')}</div>`;
     $('#grid').insertBefore(card,$('#macro'));
     mkChart(card.querySelector('.ch'),d,an,st);
     checkAlerts(a,r.d[r.d.length-1].close);
