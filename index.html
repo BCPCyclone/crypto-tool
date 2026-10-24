@@ -30,7 +30,7 @@ h1{font-size:1.1rem;font-weight:800}
 .mu{color:var(--mu);font-size:.72rem}
 .up{color:var(--up)}.dn{color:var(--dn)}.wa{color:var(--wa)}
 .tag{display:inline-block;font-size:.72rem;font-weight:700;padding:3px 8px;border-radius:5px;background:var(--inf);margin-top:4px}
-.ch{width:100%;height:260px;margin:8px 0}
+.ch{width:100%;height:260px;margin:8px 0;position:relative}
 dl{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;font-size:.78rem;border-top:1px solid var(--bd);padding-top:8px;margin-top:4px}
 dt{color:var(--mu)}dd{text-align:right}
 .setup{border-top:1px solid var(--bd);margin-top:8px;padding-top:8px;font-size:.78rem}
@@ -187,10 +187,11 @@ const INFO={
  fund:['Funding Rate (BTC Perp)','Gebühr zwischen Long- und Short-Händlern. Stark positiv = viele gehebelte Longs (Überhitzungsrisiko).'],
  dom:['BTC-Dominanz','Anteil von Bitcoin an der gesamten Kryptomarktkapitalisierung (CoinGecko).'],
  fx:['EUR/USD','Tageskurs der EZB via frankfurter.app, genutzt für die Währungsanzeige.'],
+ vol:['Handelsvolumen','Gehandelte Menge (Aktien bzw. Coins) in der letzten Kerze im Vergleich zum Durchschnitt der 20 Kerzen davor. Über 150 % deutet auf erhöhtes Interesse hin, besonders bei Ausbrüchen. Die letzte Kerze ist meist noch nicht abgeschlossen, daher wirkt das Volumen zu niedrig. Umsatz = Volumen mal Kurs. Indizes haben bei Yahoo kein Volumen.'],
  ay:['Analysten und Termine','Daten von Yahoo (Konsens der Analysten): Kursziel (Mittel, niedrigstes, höchstes), Empfehlung (1 = stark kaufen, 5 = verkaufen) mit Verteilung Stark kaufen/Kaufen/Halten/Verkaufen/Stark verkaufen, Termin der Quartalszahlen, Gewinn-pro-Aktie-Schätzungen, Insider-Aktivität der letzten 6 Monate und Anteil der leerverkauften Aktien. Kursziele liegen oft über dem Kurs und werden verzögert angepasst. Vor Quartalszahlen steigt das Kursrisiko deutlich.'],
  dist:['Risiko und historische Verteilung','Max. Drawdown = größter Rückgang vom Hoch zum Tief. Sharpe/Sortino = Rendite je Schwankungs- bzw. Abwärtsrisiko. VaR 95 % = Tagesverlust, der in 95 % der Tage nicht überschritten wurde, CVaR = Durchschnitt der schlechtesten 5 % Tage. Die Tabelle zeigt, wie sich der Kurs historisch nach 1 Monat bis 3 Jahren entwickelte (P10 = nur 10 % der Fälle waren schlechter, P90 = nur 10 % besser). Die Spalte Signal nutzt nur Tage mit demselben Technik-Signal wie heute. Zeiträume überlappen, bei langen Horizonten gibt es nur wenige unabhängige Fälle. Keine Prognose.'],
  season:['Saisonalität','Durchschnittliche Monatsrendite in der Vergangenheit für den aktuellen und den nächsten Kalendermonat, mit Anteil der Jahre im Plus. Saisonale Muster sind schwach und können verschwinden.'],
- vp:['Volumenprofil','Zeigt, auf welchen Preisniveaus in den letzten 250 Kerzen am meisten gehandelt wurde. POC = Preis mit dem höchsten Volumen. Value Area = Bereich mit etwa 70 % des Volumens. Der Kurs tendiert dazu, zu diesen Zonen zurückzukehren, und sie wirken oft als Unterstützung oder Widerstand.'],
+ vp:['Volumenprofil','Zeigt waagerecht im Chart, auf welchen Preisen am meisten gehandelt wurde (die Balken rechts). Orange = Preis mit dem höchsten Volumen (POC), blau = Value Area mit etwa 70 % des Volumens. Gestrichelte Linien markieren Zonen mit besonders viel Volumen: grün unter dem Kurs = Support, rot darüber = Widerstand. Dort wurde viel gekauft und verkauft, deshalb reagiert der Kurs oft. Das Profil gilt für den sichtbaren Chartausschnitt, zoome hinein, um es anzupassen. Mit dem Schalter Volumenprofil oben lässt es sich ausblenden.'],
  deriv:['Derivate (Binance-Futures)','Funding: Gebühr zwischen Long und Short, stark positiv = überhitzte Longs. Open Interest: Summe offener Kontrakte; steigt es mit dem Kurs, bestätigt das den Trend. Long/Short-Konten: Verhältnis der Konten mit Long- zu Short-Positionen. Taker Buy/Sell über 1 = aggressive Käufer überwiegen.'],
  vix:['VIX','Erwartete Schwankung des S&P 500. Unter 16 ruhig, über 25 Stress, über 35 Panik.'],
  dxy:['US-Dollar-Index','Stärke des Dollars. Ein steigender Dollar belastet oft Aktien, Gold und Krypto, ein fallender stützt sie.'],
@@ -206,7 +207,7 @@ const INFO={
 const DEF=[{symbol:'BTCUSDT',name:'Bitcoin',crypto:true,curr:'USD'},{symbol:'ETHUSDT',name:'Ethereum',crypto:true,curr:'USD'},{symbol:'SOLUSDT',name:'Solana',crypto:true,curr:'USD'}];
 let assets=LS.get('qt7_assets',DEF),sel=LS.get('qt7_sel',[assets[0]?.symbol]).filter(Boolean),tf=LS.get('qt7_tf','1d'),cur=LS.get('qt7_cur','EUR'),theme=LS.get('qt7_theme','light');
 let cfg=LS.get('qt7_cfg',{key:'',capital:10000,risk:1}),setups=LS.get('qt7_setups',{}),alerts=LS.get('qt7_alerts',[]);
-let busy=false,arT,fx={r:0.92,live:false,ts:''},token=0,charts=[],cache=new Map();
+let vpOn=LS.get('qt7_vp',true),busy=false,arT,fx={r:0.92,live:false,ts:''},token=0,charts=[],cache=new Map();
 const TFS=[['1h','1H'],['4h','4H'],['1d','1T'],['1w','1W']];
 
 /* ---------- Helfer ---------- */
@@ -367,7 +368,7 @@ function verdict(an,st,vol,s,fa,nw,ex){
   const t1=(an.enough?`Technisch zeigt sich ein ${an.regime.replace('Übergang / Seitwärts','Übergangs-/Seitwärtsmarkt')}`:'Für ein Trendurteil liegen zu wenig Kerzen vor (unter 200)')+(an.cross!=='–'?` mit ${an.cross.split(' (')[0]}`:'')+(d200!=null?`, der Kurs liegt ${fmt(Math.abs(d200),1)} % ${d200>=0?'über':'unter'} der EMA 200`:'')+`; das MACD-Momentum ist ${an.hist>=0?'positiv':'negativ'} und der RSI (${fmt(an.rsi,0)}) ${rsiL}`+(mt?'; '+mt:'')+'.';
   const nf=an.fib.reduce((b,f)=>Math.abs(f.v-an.last)<Math.abs(b.v-an.last)?f:b);
   const q=st.crv==null?null:st.crv>=2?'attraktiv':st.crv>=1?'mäßig':'schwach';
-  const t2=`Der Kurs bewegt sich zwischen Support ${an.sup?s+fmt(an.sup):'(offen)'} und Resistance ${an.res?s+fmt(an.res):'(offen)'}, das nächste Fibonacci-Level liegt bei ${s}${fmt(nf.v)} (${nf.r}); das ${st.dir}-Setup bietet ein ${q?q+'es':'nicht berechenbares'} CRV${st.crv!=null?' von '+fmt(st.crv,1):''}`+((st.dir==='Long'&&an.cls==='dn')||(st.dir==='Short'&&an.cls==='up')?' und läuft gegen den Haupttrend':'')+'.';
+  const t2=`Der Kurs bewegt sich zwischen Support ${an.sup?s+fmt(an.sup):'(offen)'} und Resistance ${an.res?s+fmt(an.res):'(offen)'}, das nächste Fibonacci-Level liegt bei ${s}${fmt(nf.v)} (${nf.r}); das ${st.dir}-Setup bietet ein ${q?q+'es':'nicht berechenbares'} CRV${st.crv!=null?' von '+fmt(st.crv,1):''}`+((st.dir==='Long'&&an.cls==='dn')||(st.dir==='Short'&&an.cls==='up')?' und läuft gegen den Haupttrend':'')+(ex.vz&&(ex.vz.sup!=null||ex.vz.res!=null)?`; im Volumenprofil liegt die nächste Unterstützungszone ${ex.vz.sup!=null?s+fmt(ex.vz.sup):'(keine)'} und die nächste Widerstandszone ${ex.vz.res!=null?s+fmt(ex.vz.res):'(keine)'}`:'')+'.';
   const t3=`Die ATR beträgt ${fmt(an.atr/an.last*100,1)} % des Kurses`+(vol?`, die Volatilität ${fmt(vol.ann*100,0)} % p.a. (1σ-Spanne für 1 Jahr: ${s}${fmt(an.last*Math.exp(-vol.ann))} bis ${s}${fmt(an.last*Math.exp(vol.ann))})`:'')+'.';
   const parts=[];
   if(rl&&rl.r6!=null)parts.push(`relativ zu ${rl.name} ist der Titel ${rl.r6>=0?'stärker':'schwächer'} (${rl.r6>=0?'+':''}${fmt(rl.r6,1)} % über 6 Monate, Trend ${rl.strong?'aufwärts':'abwärts'})`);
@@ -413,14 +414,38 @@ function mkChart(el,d,an,st){
   pl(st.entry,'#3b82f6','Entry',0);pl(st.stop,'#f6465d','Stop',2);pl(st.target,'#0ecb81','Ziel',2);
   an.fib.filter(f=>f.r!==.5).forEach(f=>pl(f.v,'#8d97a5','Fib '+f.r,3));
   ch.timeScale().fitContent();
-  const ro=new ResizeObserver(()=>ch.applyOptions({width:el.clientWidth}));ro.observe(el);
+  let draw=()=>{};
+  if(vpOn){
+    const cv=document.createElement('canvas');cv.style.cssText='position:absolute;left:0;top:0;pointer-events:none;z-index:2';el.appendChild(cv);
+    draw=()=>{
+      const w=el.clientWidth,h=el.clientHeight,dpr=window.devicePixelRatio||1;
+      cv.width=w*dpr;cv.height=h*dpr;cv.style.width=w+'px';cv.style.height=h+'px';
+      const g=cv.getContext('2d');g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,w,h);
+      const lr=ch.timeScale().getVisibleLogicalRange();if(!lr)return;
+      const i0=Math.max(0,Math.floor(lr.from)),i1=Math.min(d.length-1,Math.ceil(lr.to));
+      const vp=volProfile(d.slice(i0,i1+1));if(!vp)return;
+      const ps=ch.priceScale('right'),pw=(ps.width&&ps.width())||56,x1=w-pw-2,maxW=w*.3;
+      vp.bins.forEach(b=>{const y1=cs.priceToCoordinate(b.hi),y2=cs.priceToCoordinate(b.lo);if(y1==null||y2==null)return;
+        const bw=b.v/vp.max*maxW;g.fillStyle=b.poc?'rgba(230,162,60,.6)':b.va?'rgba(59,130,246,.32)':'rgba(140,150,165,.28)';
+        g.fillRect(x1-bw,Math.min(y1,y2),bw,Math.max(1,Math.abs(y2-y1)-1))});
+      g.font='11px sans-serif';
+      vp.nodes.forEach(n=>{const y=cs.priceToCoordinate(n.p);if(y==null||y<8||y>h-8)return;
+        const sup=n.p<an.last;g.strokeStyle=sup?'rgba(14,203,129,.9)':'rgba(246,70,93,.9)';g.fillStyle=g.strokeStyle;
+        g.setLineDash([5,4]);g.beginPath();g.moveTo(0,y);g.lineTo(x1,y);g.stroke();g.setLineDash([]);
+        g.fillText((sup?'Support ':'Widerstand ')+fmt(n.p),4,y-3)});
+    };
+    ch.timeScale().subscribeVisibleLogicalRangeChange(()=>requestAnimationFrame(draw));
+    ['pointerup','touchend','wheel'].forEach(ev=>el.addEventListener(ev,()=>setTimeout(draw,60),{passive:true}));
+    requestAnimationFrame(draw);setTimeout(draw,150);
+  }
+  const ro=new ResizeObserver(()=>{ch.applyOptions({width:el.clientWidth});draw()});ro.observe(el);
   charts.push({ch,ro});
 }
 
 /* ---------- Rendering ---------- */
 function renderChips(){
   $('#chips').innerHTML=assets.map(a=>`<button class="chip ${sel.includes(a.symbol)?'on':''}" data-act="chip" data-sym="${esc(a.symbol)}" aria-pressed="${sel.includes(a.symbol)}">${esc(a.name)}</button>`).join('')+'<span class="mu">max. 3</span>';
-  $('#tf').innerHTML=TFS.map(([v,l])=>`<button class="${tf===v?'on':''}" data-act="tf" data-sym="${v}">${l}</button>`).join('');
+  $('#tf').innerHTML=TFS.map(([v,l])=>`<button class="${tf===v?'on':''}" data-act="tf" data-sym="${v}">${l}</button>`).join('')+`<button class="${vpOn?'on':''}" data-act="vp" aria-pressed="${vpOn}">Volumenprofil</button>`;
   $('#b-cur').textContent=cur;$('#b-th').textContent=theme==='light'?'Dark':'Light';
 }
 function benchOf(a){
@@ -501,13 +526,21 @@ function seasonality(d){
   return by.map(a=>a.length>=4?{avg:a.reduce((x,y)=>x+y,0)/a.length*100,hit:a.filter(x=>x>0).length/a.length*100,n:a.length}:null);
 }
 function analytics(hi,crypto,cur){return{risk:riskStats(hi,crypto),dist:fwdDist(hi,crypto,btSeries(hi),cur),season:seasonality(hi)}}
-function volProfile(d){
-  const w=d.slice(-250),lo=Math.min(...w.map(x=>x.low)),hi=Math.max(...w.map(x=>x.high)),B=40,st=(hi-lo)/B;if(!(st>0))return null;
-  const v=new Array(B).fill(0);w.forEach(x=>{const p=(x.high+x.low+x.close)/3;v[Math.min(B-1,Math.floor((p-lo)/st))]+=x.vol});
-  const tot=v.reduce((a,b)=>a+b,0);if(!tot)return null;
-  const poc=v.indexOf(Math.max(...v));let a=poc,b=poc,acc=v[poc];
+function volProfile(d,B=48){
+  if(!d||d.length<5)return null;
+  const lo=Math.min(...d.map(x=>x.low)),hi=Math.max(...d.map(x=>x.high)),st=(hi-lo)/B;if(!(st>0))return null;
+  const v=new Array(B).fill(0);
+  d.forEach(x=>{if(!x.vol)return;const r=x.high-x.low;
+    if(r<=0){v[Math.min(B-1,Math.max(0,Math.floor((x.close-lo)/st)))]+=x.vol;return}
+    const a=Math.max(0,Math.floor((x.low-lo)/st)),b=Math.min(B-1,Math.floor((x.high-lo)/st));
+    for(let i=a;i<=b;i++){const bl=lo+i*st,ov=Math.min(bl+st,x.high)-Math.max(bl,x.low);if(ov>0)v[i]+=x.vol*ov/r}});
+  const tot=v.reduce((p,q)=>p+q,0);if(!tot)return null;
+  const mx=Math.max(...v),poc=v.indexOf(mx);let a=poc,b=poc,acc=v[poc];
   while(acc<tot*.7&&(a>0||b<B-1)){const Lv=a>0?v[a-1]:-1,Rv=b<B-1?v[b+1]:-1;if(Lv>=Rv){a--;acc+=v[a]}else{b++;acc+=v[b]}}
-  return{poc:lo+(poc+.5)*st,val:lo+a*st,vah:lo+(b+1)*st};
+  const nodes=[];
+  for(let i=0;i<B;i++){const l=i>0?v[i-1]:0,r=i<B-1?v[i+1]:0;
+    if(v[i]>=mx*.55&&v[i]>=l&&v[i]>=r&&!(nodes.length&&i-nodes[nodes.length-1].i<4))nodes.push({i,p:lo+(i+.5)*st,v:v[i]})}
+  return{poc:lo+(poc+.5)*st,val:lo+a*st,vah:lo+(b+1)*st,max:mx,nodes,bins:v.map((q,i)=>({v:q,lo:lo+i*st,hi:lo+(i+1)*st,va:i>=a&&i<=b,poc:i===poc}))};
 }
 async function deriv(a){
   const k='D|'+a.symbol,c=cache.get(k);if(c&&Date.now()-c.t<3e5)return c.d;
@@ -570,8 +603,10 @@ async function render(){
     const rs0=r.B&&r.daily&&r.bn?relStrength(r.daily,r.bn,a.crypto):null,rsx=rs0?{...rs0,name:r.B.name}:null;
     const bt=r.hi?backtest(r.hi,a.crypto):null;
     const ax=r.hi?analytics(r.hi,a.crypto,bt?bt.cur:'ne'):null;
+    const vpAll=volProfile(d.slice(-250));
+    const vzS=vpAll?vpAll.nodes.filter(n=>n.p<an.last).map(n=>n.p).sort((x,y)=>y-x):[],vzR=vpAll?vpAll.nodes.filter(n=>n.p>an.last).map(n=>n.p).sort((x,y)=>x-y):[];
     const ayx=r.ay&&!r.ay.err?{tm:r.ay.tm!=null?r.ay.tm*f:null,up:r.ay.tm!=null?(r.ay.tm*f/an.last-1)*100:null,n:r.ay.n,rm:r.ay.rm,rkl:RK[r.ay.rk]||'',days:r.ay.ed?Math.round((r.ay.ed-Date.now()/1000)/86400):null}:null;
-    const vd=verdict(an,st,vol,s,r.fa,r.nw,{mtf,rs:rsx,bt,ax,dr:r.dr,ay:ayx});
+    const vd=verdict(an,st,vol,s,r.fa,r.nw,{mtf,rs:rsx,bt,ax,dr:r.dr,ay:ayx,vz:{sup:vzS.length?vzS[0]:null,res:vzR.length?vzR[0]:null}});
     const LB={up:'Aufwärtstrend',dn:'Abwärtstrend',wa:'Übergangsphase'};
     const mtfRow=mtf?`<dt>Mehrzeitebenen<button class="i" data-info="mtf">?</button></dt><dd>Tag ${dd.arrow} · Woche ${ww.arrow}<br><span class="${dd.cls===ww.cls&&dd.cls!=='wa'?dd.cls:'wa'}">${dd.cls===ww.cls?(dd.cls==='wa'?'beide ohne Richtung':'übereinstimmend'):'widersprüchlich'}</span></dd>`:'';
     const rsRow=rsx?`<dt>Rel. Stärke vs ${esc(rsx.name)}<button class="i" data-info="rs">?</button></dt><dd>${[['3 Mon',rsx.r3],['6 Mon',rsx.r6],['1 J',rsx.r12]].filter(x=>x[1]!=null).map(([l,v])=>`${l} <span class="${v>=0?'up':'dn'}">${v>=0?'+':''}${fmt(v,1)} %</span>`).join(' · ')}<br><span class="${rsx.strong?'up':'dn'}">${rsx.strong?'Trend: stärker':'Trend: schwächer'}</span></dd>`:'';
@@ -619,8 +654,12 @@ async function render(){
     const MN=['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
     let seaRow='';
     if(ax){const mi=new Date().getUTCMonth();seaRow=`<dt>Saisonalität<button class="i" data-info="season">?</button></dt><dd>`+[mi,(mi+1)%12].map(m=>{const x=ax.season[m];return x?`${MN[m]} Ø <span class="${x.avg>=0?'up':'dn'}">${x.avg>=0?'+':''}${fmt(x.avg,1)} %</span> (${fmt(x.hit,0)} % Plus, ${x.n} J)`:`${MN[m]} –`}).join('<br>')+'</dd>'}
-    const vp=volProfile(d);
-    const vpRow=vp?`<dt>Volumenprofil<button class="i" data-info="vp">?</button></dt><dd>POC ${s}${fmt(vp.poc)}<br>Value Area ${s}${fmt(vp.val)} – ${s}${fmt(vp.vah)}<br><span class="${an.last>vp.vah?'up':an.last<vp.val?'dn':'wa'}">Kurs ${an.last>vp.vah?'über':an.last<vp.val?'unter':'in'} der Value Area</span></dd>`:'';
+    const vm=x=>x>=1e9?fmt(x/1e9,2)+' Mrd.':x>=1e6?fmt(x/1e6,2)+' Mio.':x>=1e3?fmt(x/1e3,1)+' Tsd.':fmt(x,0);
+    let volRow='';
+    {const vs=d.map(x=>x.vol),n=vs.length;if(n>22&&vs[n-1]>0){const av=vs.slice(n-21,n-1).reduce((x,y)=>x+y,0)/20,lv=vs[n-1],rt=av>0?lv/av*100:null;
+      volRow=`<dt>Handelsvolumen<button class="i" data-info="vol">?</button></dt><dd>${vm(lv)} (letzte Kerze)<br>Ø 20 Kerzen: ${vm(av)}${rt!=null?`<br><span class="${rt>=150?'up':rt<50?'wa':''}">${fmt(rt,0)} % vom Schnitt</span>`:''}<br><span class="mu">Umsatz ≈ ${s}${vm(lv*an.last)}</span></dd>`}}
+    const vp=vpAll;
+    const vpRow=vp?`<dt>Volumenprofil<button class="i" data-info="vp">?</button></dt><dd>POC ${s}${fmt(vp.poc)}<br>Value Area ${s}${fmt(vp.val)} – ${s}${fmt(vp.vah)}<br><span class="${an.last>vp.vah?'up':an.last<vp.val?'dn':'wa'}">Kurs ${an.last>vp.vah?'über':an.last<vp.val?'unter':'in'} der Value Area</span>${vzS.length?'<br>Support-Zonen: '+vzS.slice(0,2).map(x=>s+fmt(x)).join(', '):''}${vzR.length?'<br>Widerstands-Zonen: '+vzR.slice(0,2).map(x=>s+fmt(x)).join(', '):''}</dd>`:'';
     let drRows='';
     if(a.crypto){const o=r.dr;
       if(o){const p7=r.daily&&r.daily.length>8?(r.daily[r.daily.length-1].close/r.daily[r.daily.length-8].close-1)*100:null;
@@ -648,7 +687,7 @@ async function render(){
       <dt>ATR (14)<button class="i" data-info="atr">?</button></dt><dd>${s}${fmt(an.atr)} (${fmt(an.atr/an.last*100,2)} %)</dd>
       <dt>Support / Resistance<button class="i" data-info="sr">?</button></dt><dd>${an.sup?s+fmt(an.sup):'–'} / ${an.res?s+fmt(an.res):'–'}</dd>
       <dt>Fibonacci (Szenario)<button class="i" data-info="fib">?</button></dt><dd>${an.fib.map(x=>s+fmt(x.v)).join(' · ')}</dd>
-      <dt>Spanne 1σ<button class="i" data-info="scen">?</button></dt><dd>${scen}</dd>${mtfRow}${rsRow}${vpRow}${seaRow}${drRows}${fundRows}${ayRows}
+      <dt>Spanne 1σ<button class="i" data-info="scen">?</button></dt><dd>${scen}</dd>${mtfRow}${rsRow}${volRow}${vpRow}${seaRow}${drRows}${fundRows}${ayRows}
     </dl>${newsHtml}${ayHtml}${btHtml}${axHtml}
     <div class="setup"><b>Trade-Setup (${st.dir})</b><button class="i" data-info="crv">?</button> <span class="mu">${st.auto?'automatisch: Stop 2 ATR, Ziel nächste Resistance':'manuell'}</span>
       <div class="in" data-sym="${esc(a.symbol)}" data-f="${f}">
@@ -726,6 +765,7 @@ document.addEventListener('click',e=>{
   if(t.dataset.info){const i=INFO[t.dataset.info];$('#inf-t').textContent=i[0];$('#inf-b').textContent=i[1];return open('#m-inf')}
   const s=t.dataset.sym,act=t.dataset.act;
   if(act==='chip'){sel=sel.includes(s)?sel.filter(x=>x!==s):[...sel,s].slice(-3);LS.set('qt7_sel',sel);render()}
+  if(act==='vp'){vpOn=!vpOn;LS.set('qt7_vp',vpOn);render()}
   if(act==='tf'){tf=s;LS.set('qt7_tf',tf);render()}
   if(act==='del'&&confirm('Asset wirklich löschen?')){assets=assets.filter(a=>a.symbol!==s);sel=sel.filter(x=>x!==s);LS.set('qt7_assets',assets);LS.set('qt7_sel',sel);render()}
   if(act==='pick')pick(+t.dataset.i);
