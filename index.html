@@ -154,6 +154,15 @@ const INFO={
  fund:['Funding Rate (BTC Perp)','Gebühr zwischen Long- und Short-Händlern. Stark positiv = viele gehebelte Longs (Überhitzungsrisiko).'],
  dom:['BTC-Dominanz','Anteil von Bitcoin an der gesamten Kryptomarktkapitalisierung (CoinGecko).'],
  fx:['EUR/USD','Tageskurs der EZB via frankfurter.app, genutzt für die Währungsanzeige.'],
+ dist:['Risiko und historische Verteilung','Max. Drawdown = größter Rückgang vom Hoch zum Tief. Sharpe/Sortino = Rendite je Schwankungs- bzw. Abwärtsrisiko. VaR 95 % = Tagesverlust, der in 95 % der Tage nicht überschritten wurde, CVaR = Durchschnitt der schlechtesten 5 % Tage. Die Tabelle zeigt, wie sich der Kurs historisch nach 1 Monat bis 3 Jahren entwickelte (P10 = nur 10 % der Fälle waren schlechter, P90 = nur 10 % besser). Die Spalte Signal nutzt nur Tage mit demselben Technik-Signal wie heute. Zeiträume überlappen, bei langen Horizonten gibt es nur wenige unabhängige Fälle. Keine Prognose.'],
+ season:['Saisonalität','Durchschnittliche Monatsrendite in der Vergangenheit für den aktuellen und den nächsten Kalendermonat, mit Anteil der Jahre im Plus. Saisonale Muster sind schwach und können verschwinden.'],
+ vp:['Volumenprofil','Zeigt, auf welchen Preisniveaus in den letzten 250 Kerzen am meisten gehandelt wurde. POC = Preis mit dem höchsten Volumen. Value Area = Bereich mit etwa 70 % des Volumens. Der Kurs tendiert dazu, zu diesen Zonen zurückzukehren, und sie wirken oft als Unterstützung oder Widerstand.'],
+ deriv:['Derivate (Binance-Futures)','Funding: Gebühr zwischen Long und Short, stark positiv = überhitzte Longs. Open Interest: Summe offener Kontrakte; steigt es mit dem Kurs, bestätigt das den Trend. Long/Short-Konten: Verhältnis der Konten mit Long- zu Short-Positionen. Taker Buy/Sell über 1 = aggressive Käufer überwiegen.'],
+ vix:['VIX','Erwartete Schwankung des S&P 500. Unter 16 ruhig, über 25 Stress, über 35 Panik.'],
+ dxy:['US-Dollar-Index','Stärke des Dollars. Ein steigender Dollar belastet oft Aktien, Gold und Krypto, ein fallender stützt sie.'],
+ tnx:['US-Rendite 10 Jahre','Zinsniveau für Staatsanleihen. Stark steigende Renditen belasten Aktien mit hohen Bewertungen und Krypto.'],
+ curve:['Zinskurve (10 Jahre minus 3 Monate)','Negativ = invertiert. Eine invertierte Kurve ging historisch oft einer Rezession voraus, mit großem zeitlichem Abstand.'],
+ mreg:['Makro-Regime','Einfache Zählung: VIX über 25, invertierte Zinskurve, stark steigender Dollar und S&P 500 unter seinem 50-Tage-Schnitt zählen als Risiko-Signale. Ab 2 Signalen Risk-Off, bei 0 Risk-On.'],
  mtf:['Mehrzeitebenen','Vergleicht den Trend auf Tages- und Wochenbasis. Stimmen beide überein, ist das Signal verlässlicher; widersprechen sie sich, handelst du oft gegen die übergeordnete Richtung.'],
  rs:['Relative Stärke','Vergleich mit einer Benchmark (Krypto: Bitcoin; Bitcoin: S&P 500; deutsche Aktien: DAX; sonst S&P 500). Der Wert zeigt, wie sich das Kursverhältnis Asset/Benchmark über 3, 6 und 12 Monate verändert hat. Plus = das Asset war stärker. Der Trend vergleicht das aktuelle Verhältnis mit seinem 50-Tage-Schnitt.'],
  bt:['Backtest','Prüft rückwirkend, wie sich das Asset nach jedem früheren Tag mit demselben Technik-Score entwickelte (Trend, MACD, RSI, EMA-Kreuz). Gezeigt werden durchschnittliche Rendite und Trefferquote für die Haltedauer, verglichen mit allen Tagen. Es nutzt nur Daten bis zum jeweiligen Tag, enthält aber keine Gebühren, überlappende Zeiträume und keine Fundamentaldaten oder Nachrichten. Vergangenes Verhalten ist keine Garantie.'],
@@ -313,7 +322,8 @@ function verdict(an,st,vol,s,fa,nw,ex){
   const fs=fundScore(fa),sn=sentiment(nw),m=ex.mtf,rl=ex.rs;
   const ms=m?(m.d.cls==='up'&&m.w.cls==='up'?1:m.d.cls==='dn'&&m.w.cls==='dn'?-1:0):0;
   const rsc=rl&&rl.r6!=null?(rl.strong&&rl.r6>0?1:!rl.strong&&rl.r6<0?-1:0):0;
-  const tot=sc+(fs||0)+(sn?sn.s:0)+ms+rsc;
+  const dfs=ex.dr&&ex.dr.fund!=null?(ex.dr.fund>0.03?-1:ex.dr.fund<-0.01?1:0):0;
+  const tot=sc+(fs||0)+(sn?sn.s:0)+ms+rsc+dfs;
   const lab=tot>=3?'konstruktiv':tot<=-3?'vorsichtig':'neutral',cls=tot>=3?'up':tot<=-3?'dn':'wa';
   const n=an.e200.length,d200=an.enough?(an.last/an.e200[n-1]-1)*100:null;
   const rsiL=an.rsi>70?'überkauft':an.rsi<30?'überverkauft':'neutral';
@@ -339,8 +349,13 @@ function verdict(an,st,vol,s,fa,nw,ex){
     if(c.n>=15){const edge=bt.cur==='k'?(c.avg>h.all.avg+0.5&&c.hit>h.all.hit):bt.cur==='v'?(c.avg<h.all.avg-0.5&&c.hit<h.all.hit):null;
       t6=`Im Backtest (${fmt(bt.yrs,1)} Jahre, nur Technik) brachte das aktuelle Tagessignal „${cl}“ nach ${h.H} Handelstagen im Schnitt ${fmt(c.avg,1)} % (Trefferquote ${fmt(c.hit,0)} %, ${c.n} Fälle) gegenüber ${fmt(h.all.avg,1)} % an allen Tagen`+(edge===null?'; neutrale Phasen liefern kein Signal.':edge?' – ein historischer Vorteil, aber kein Garant.':' – kein belastbarer Vorteil.')}
     else t6=`Im Backtest gab es für das aktuelle Signal zu wenige vergleichbare Fälle (${c.n}).`}
+  let t7='';const ax=ex.ax;
+  if(ax&&ax.risk){const k=ax.risk,d1=ax.dist[2];
+    t7=`Risikoprofil (${fmt(k.yrs,1)} Jahre Historie): maximaler Drawdown ${fmt(k.mdd,0)} %, aktuell ${fmt(k.dd,0)} % unter dem Hoch, Sharpe ${fmt(k.sharpe,2)}, Tages-VaR (95 %) ${fmt(k.var95,1)} %`+(d1&&d1.p50!=null?`; die 1-Jahres-Rendite lag historisch im Median bei ${fmt(d1.p50*100,0)} % (P10 ${fmt(d1.p10*100,0)} %, P90 ${fmt(d1.p90*100,0)} %)`:'')+'.'}
+  let t8='';const dr=ex.dr;
+  if(dr&&dr.fund!=null)t8=`Derivate: Das Funding liegt bei ${fmt(dr.fund,4)} % je 8 Stunden (${fmt(dr.fundAnn,0)} % p. a.)${dr.fund>0.03?' und deutet auf überhitzte Long-Positionen':dr.fund<-0.01?' und deutet auf überfüllte Short-Positionen':' und ist unauffällig'}`+(dr.oi7!=null?`, das Open Interest hat sich in 7 Tagen um ${fmt(dr.oi7,1)} % verändert`:'')+'.';
   const t5=`Gesamteinschätzung: <b class="${cls}">${lab}</b> (regelbasiert, keine Anlageberatung).`;
-  return{lab,cls,html:[t1,t2,t3,t4,t6,t5].filter(Boolean).join(' ')};
+  return{lab,cls,html:[t1,t2,t3,t4,t6,t7,t8,t5].filter(Boolean).join(' ')};
 }
 /* ---------- Charts ---------- */
 function destroyCharts(){charts.forEach(c=>{try{c.ro.disconnect();c.ch.remove()}catch(e){}});charts=[]}
@@ -422,13 +437,56 @@ function relStrength(da,db,crypto){
   const sma=rt.slice(-50).reduce((x,y)=>x+y,0)/50;
   return{r3:R(N[0]),r6:R(N[1]),r12:R(N[2]),strong:rt[rt.length-1]>sma};
 }
+function riskStats(d,crypto){
+  const c=d.map(x=>x.close),n=c.length;if(n<120)return null;
+  const r=[];for(let i=1;i<n;i++)r.push(c[i]/c[i-1]-1);
+  const ppy=crypto?365:252,mu=r.reduce((a,b)=>a+b,0)/r.length,sd=Math.sqrt(r.reduce((a,b)=>a+(b-mu)**2,0)/(r.length-1)),dn=Math.sqrt(r.reduce((a,b)=>a+(b<0?b*b:0),0)/r.length);
+  let pk=c[0],mdd=0,ath=c[0];c.forEach(x=>{if(x>pk)pk=x;mdd=Math.min(mdd,x/pk-1);if(x>ath)ath=x});
+  const so=r.slice().sort((a,b)=>a-b),k=Math.max(1,Math.floor(so.length*.05));
+  return{yrs:n/ppy,sharpe:sd?mu*ppy/(sd*Math.sqrt(ppy)):null,sortino:dn?mu*ppy/(dn*Math.sqrt(ppy)):null,mdd:mdd*100,dd:(c[n-1]/ath-1)*100,var95:so[k]*100,cvar:so.slice(0,k).reduce((a,b)=>a+b,0)/k*100};
+}
+function fwdDist(d,crypto,sc,cur){
+  const c=d.map(x=>x.close),n=c.length,Hs=crypto?[30,182,365,730,1095]:[21,126,252,504,756],L=['1 Mon','6 Mon','1 Jahr','2 Jahre','3 Jahre'];
+  const q=(a,p)=>a[Math.min(a.length-1,Math.floor(p*a.length))];
+  return Hs.map((h,j)=>{const all=[],cond=[];
+    for(let i=0;i+h<n;i++){const r=c[i+h]/c[i]-1;all.push(r);const v=sc[i];if(v!=null&&(v>=3?'k':v<=-3?'v':'ne')===cur)cond.push(r)}
+    all.sort((a,b)=>a-b);cond.sort((a,b)=>a-b);const ok=all.length>=30;
+    return{l:L[j],h,eff:Math.floor(n/h),p10:ok?q(all,.1):null,p50:ok?q(all,.5):null,p90:ok?q(all,.9):null,cn:cond.length,c50:cond.length>=30?q(cond,.5):null};
+  });
+}
+function seasonality(d){
+  const m=new Map();d.forEach(x=>{const t=new Date(x.time*1000);m.set(t.getUTCFullYear()*12+t.getUTCMonth(),x.close)});
+  const ks=[...m.keys()].sort((a,b)=>a-b),by=Array.from({length:12},()=>[]);
+  for(let i=1;i<ks.length-1;i++)if(ks[i]-ks[i-1]===1)by[ks[i]%12].push(m.get(ks[i])/m.get(ks[i-1])-1);
+  return by.map(a=>a.length>=4?{avg:a.reduce((x,y)=>x+y,0)/a.length*100,hit:a.filter(x=>x>0).length/a.length*100,n:a.length}:null);
+}
+function analytics(hi,crypto,cur){return{risk:riskStats(hi,crypto),dist:fwdDist(hi,crypto,btSeries(hi),cur),season:seasonality(hi)}}
+function volProfile(d){
+  const w=d.slice(-250),lo=Math.min(...w.map(x=>x.low)),hi=Math.max(...w.map(x=>x.high)),B=40,st=(hi-lo)/B;if(!(st>0))return null;
+  const v=new Array(B).fill(0);w.forEach(x=>{const p=(x.high+x.low+x.close)/3;v[Math.min(B-1,Math.floor((p-lo)/st))]+=x.vol});
+  const tot=v.reduce((a,b)=>a+b,0);if(!tot)return null;
+  const poc=v.indexOf(Math.max(...v));let a=poc,b=poc,acc=v[poc];
+  while(acc<tot*.7&&(a>0||b<B-1)){const Lv=a>0?v[a-1]:-1,Rv=b<B-1?v[b+1]:-1;if(Lv>=Rv){a--;acc+=v[a]}else{b++;acc+=v[b]}}
+  return{poc:lo+(poc+.5)*st,val:lo+a*st,vah:lo+(b+1)*st};
+}
+async function deriv(a){
+  const k='D|'+a.symbol,c=cache.get(k);if(c&&Date.now()-c.t<3e5)return c.d;
+  const F='https://fapi.binance.com',sy=a.symbol;
+  const [fr,oi,ls,tk]=await Promise.allSettled([getJSON(`${F}/fapi/v1/fundingRate?symbol=${sy}&limit=21`),getJSON(`${F}/futures/data/openInterestHist?symbol=${sy}&period=1d&limit=30`),getJSON(`${F}/futures/data/globalLongShortAccountRatio?symbol=${sy}&period=1d&limit=30`),getJSON(`${F}/futures/data/takerlongshortRatio?symbol=${sy}&period=1d&limit=30`)]);
+  const v=x=>x.status==='fulfilled'&&Array.isArray(x.value)&&x.value.length?x.value:null,o={};
+  const f=v(fr);if(f){o.fund=f.reduce((q,x)=>q+ +x.fundingRate,0)/f.length*100;o.fundAnn=o.fund*3*365}
+  const i=v(oi);if(i&&i.length>8){const Lx=+i[i.length-1].sumOpenInterestValue;o.oi7=(Lx/ +i[i.length-8].sumOpenInterestValue-1)*100;o.oi30=(Lx/ +i[0].sumOpenInterestValue-1)*100}
+  const l=v(ls);if(l)o.ls=+l[l.length-1].longShortRatio;
+  const t=v(tk);if(t){const t7=t.slice(-7);o.tk=t7.reduce((q,x)=>q+ +x.buySellRatio,0)/t7.length}
+  const d=Object.keys(o).length?o:null;cache.set(k,{t:Date.now(),d});return d;
+}
 const soft=(p,ms=8000)=>Promise.race([p,new Promise(r=>setTimeout(()=>r(null),ms))]);
 async function load(a){
   const ex=[(!a.crypto&&a.src==='yahoo')?fundamentals(a).catch(()=>null):Promise.resolve(null),(a.crypto||a.src==='yahoo')?news(a).catch(()=>null):Promise.resolve(null)];
-  const B=benchOf(a),wkP=tf==='1w'?null:candles(a,'1w').catch(()=>null),bnP=B?candles(B,'1d').catch(()=>null):null,hiP=history(a).catch(()=>null);
+  const drP=a.crypto?deriv(a).catch(()=>null):null,B=benchOf(a),wkP=tf==='1w'?null:candles(a,'1w').catch(()=>null),bnP=B?candles(B,'1d').catch(()=>null):null,hiP=history(a).catch(()=>null);
   try{const d=await candles(a,tf);let daily=d;if(tf!=='1d')try{daily=await candles(a,'1d')}catch(e){daily=null}
-    const [fa,nw,wk,bn,hi]=await Promise.all([...ex,wkP,bnP,hiP].map(p=>soft(p)));
-    return{a,d,daily,fa,nw,wk:tf==='1w'?d:wk,bn,hi,B}}catch(e){return{a,err:e.message}}
+    const [fa,nw,wk,bn,hi,dr]=await Promise.all([...ex,wkP,bnP,hiP,drP].map(p=>soft(p)));
+    return{a,d,daily,fa,nw,wk:tf==='1w'?d:wk,bn,hi,dr,B}}catch(e){return{a,err:e.message}}
 }
 async function render(){
   const my=++token;busy=true;
@@ -451,7 +509,8 @@ async function render(){
     const mtf=dd&&ww&&dd.enough&&ww.enough?{d:dd,w:ww}:null;
     const rs0=r.B&&r.daily&&r.bn?relStrength(r.daily,r.bn,a.crypto):null,rsx=rs0?{...rs0,name:r.B.name}:null;
     const bt=r.hi?backtest(r.hi,a.crypto):null;
-    const vd=verdict(an,st,vol,s,r.fa,r.nw,{mtf,rs:rsx,bt});
+    const ax=r.hi?analytics(r.hi,a.crypto,bt?bt.cur:'ne'):null;
+    const vd=verdict(an,st,vol,s,r.fa,r.nw,{mtf,rs:rsx,bt,ax,dr:r.dr});
     const LB={up:'Aufwärtstrend',dn:'Abwärtstrend',wa:'Übergangsphase'};
     const mtfRow=mtf?`<dt>Mehrzeitebenen<button class="i" data-info="mtf">?</button></dt><dd>Tag ${dd.arrow} · Woche ${ww.arrow}<br><span class="${dd.cls===ww.cls&&dd.cls!=='wa'?dd.cls:'wa'}">${dd.cls===ww.cls?(dd.cls==='wa'?'beide ohne Richtung':'übereinstimmend'):'widersprüchlich'}</span></dd>`:'';
     const rsRow=rsx?`<dt>Rel. Stärke vs ${esc(rsx.name)}<button class="i" data-info="rs">?</button></dt><dd>${[['3 Mon',rsx.r3],['6 Mon',rsx.r6],['1 J',rsx.r12]].filter(x=>x[1]!=null).map(([l,v])=>`${l} <span class="${v>=0?'up':'dn'}">${v>=0?'+':''}${fmt(v,1)} %</span>`).join(' · ')}<br><span class="${rsx.strong?'up':'dn'}">${rsx.strong?'Trend: stärker':'Trend: schwächer'}</span></dd>`:'';
@@ -475,6 +534,23 @@ async function render(){
     const c=st.crv==null?'–':fmt(st.crv,2);
     ban.push(`${esc(a.name)}: <b class="${st.crv>=2?'up':st.crv<1?'dn':'wa'}">${c}</b>`);
     src.push(srcName(a));
+    const MN=['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
+    let seaRow='';
+    if(ax){const mi=new Date().getUTCMonth();seaRow=`<dt>Saisonalität<button class="i" data-info="season">?</button></dt><dd>`+[mi,(mi+1)%12].map(m=>{const x=ax.season[m];return x?`${MN[m]} Ø <span class="${x.avg>=0?'up':'dn'}">${x.avg>=0?'+':''}${fmt(x.avg,1)} %</span> (${fmt(x.hit,0)} % Plus, ${x.n} J)`:`${MN[m]} –`}).join('<br>')+'</dd>'}
+    const vp=volProfile(d);
+    const vpRow=vp?`<dt>Volumenprofil<button class="i" data-info="vp">?</button></dt><dd>POC ${s}${fmt(vp.poc)}<br>Value Area ${s}${fmt(vp.val)} – ${s}${fmt(vp.vah)}<br><span class="${an.last>vp.vah?'up':an.last<vp.val?'dn':'wa'}">Kurs ${an.last>vp.vah?'über':an.last<vp.val?'unter':'in'} der Value Area</span></dd>`:'';
+    let drRows='';
+    if(a.crypto){const o=r.dr;
+      if(o){const p7=r.daily&&r.daily.length>8?(r.daily[r.daily.length-1].close/r.daily[r.daily.length-8].close-1)*100:null;
+        const itp=o.oi7!=null&&p7!=null?(o.oi7>0&&p7>0?'Trend wird durch steigendes Open Interest bestätigt':o.oi7>0&&p7<0?'neue Shorts bauen auf (Abwärtsdruck, aber Squeeze-Risiko)':o.oi7<0&&p7>0?'Anstieg durch Short-Eindeckung, weniger belastbar':'Positionen werden abgebaut'):'';
+        drRows=`<dt>Derivate (Futures)<button class="i" data-info="deriv">?</button></dt><dd>${o.fund!=null?`Funding Ø 7 T ${fmt(o.fund,4)} % je 8 h<br>(${fmt(o.fundAnn,0)} % p. a.)<br>`:''}${o.oi7!=null?`Open Interest 7 T ${o.oi7>=0?'+':''}${fmt(o.oi7,1)} %, 30 T ${o.oi30>=0?'+':''}${fmt(o.oi30,1)} %<br>`:''}${o.ls!=null?`Long/Short-Konten ${fmt(o.ls,2)}<br>`:''}${o.tk!=null?`Taker Buy/Sell ${fmt(o.tk,2)}<br>`:''}<span class="mu">${itp}</span></dd>`}
+      else drRows=fr('Derivate (Futures)','<span class="mu">nicht verfügbar</span>')}
+    let axHtml='';
+    if(ax&&(ax.risk||ax.dist)){const k=ax.risk;
+      axHtml=`<details style="margin-top:8px;font-size:.78rem"><summary><b>Risiko &amp; historische Verteilung</b><button class="i" data-info="dist">?</button></summary>`+
+      (k?`<dl><dt>Max. Drawdown</dt><dd class="dn">${fmt(k.mdd,0)} %</dd><dt>Aktuell vom Hoch</dt><dd>${fmt(k.dd,0)} %</dd><dt>Sharpe / Sortino</dt><dd>${fmt(k.sharpe,2)} / ${fmt(k.sortino,2)}</dd><dt>VaR 95 % / CVaR (1 Tag)</dt><dd>${fmt(k.var95,1)} % / ${fmt(k.cvar,1)} %</dd></dl>`:'')+
+      `<table style="margin-top:6px"><tr><th>Horizont</th><th>P10</th><th>Median</th><th>P90</th><th>bei Signal</th></tr>`+ax.dist.map(x=>x.p50==null?`<tr><td>${x.l}</td><td colspan="4">zu wenig Historie</td></tr>`:`<tr><td>${x.l}<br><span class="mu">≈${x.eff} Zeitr.</span></td><td>${s}${fmt(an.last*(1+x.p10))}</td><td>${s}${fmt(an.last*(1+x.p50))}</td><td>${s}${fmt(an.last*(1+x.p90))}</td><td>${x.c50!=null?s+fmt(an.last*(1+x.c50))+'<br><span class="mu">n='+x.cn+'</span>':'–'}</td></tr>`).join('')+
+      `</table><div class="mu" style="margin-top:4px">Empirische Rendite-Quantile aus ${k?fmt(k.yrs,1):'?'} Jahren Historie, auf den heutigen Kurs angewendet. Zeitr. = grob unabhängige Zeiträume; bei langen Horizonten ist die Aussagekraft gering. Keine Prognose.</div></details>`}
     card.innerHTML=`
     <div class="hd"><div><div class="nm">${esc(a.name)} <span class="mu">${esc(a.symbol)}</span></div>
       <div class="pr">${s}${fmt(an.last)} <span class="${an.chg>=0?'up':'dn'}" style="font-size:.8rem">${an.chg>=0?'▲':'▼'} ${fmt(Math.abs(an.chg),2)} %</span></div>
@@ -490,8 +566,8 @@ async function render(){
       <dt>ATR (14)<button class="i" data-info="atr">?</button></dt><dd>${s}${fmt(an.atr)} (${fmt(an.atr/an.last*100,2)} %)</dd>
       <dt>Support / Resistance<button class="i" data-info="sr">?</button></dt><dd>${an.sup?s+fmt(an.sup):'–'} / ${an.res?s+fmt(an.res):'–'}</dd>
       <dt>Fibonacci (Szenario)<button class="i" data-info="fib">?</button></dt><dd>${an.fib.map(x=>s+fmt(x.v)).join(' · ')}</dd>
-      <dt>Spanne 1σ<button class="i" data-info="scen">?</button></dt><dd>${scen}</dd>${mtfRow}${rsRow}${fundRows}
-    </dl>${newsHtml}${btHtml}
+      <dt>Spanne 1σ<button class="i" data-info="scen">?</button></dt><dd>${scen}</dd>${mtfRow}${rsRow}${vpRow}${seaRow}${drRows}${fundRows}
+    </dl>${newsHtml}${btHtml}${axHtml}
     <div class="setup"><b>Trade-Setup (${st.dir})</b><button class="i" data-info="crv">?</button> <span class="mu">${st.auto?'automatisch: Stop 2 ATR, Ziel nächste Resistance':'manuell'}</span>
       <div class="in" data-sym="${esc(a.symbol)}" data-f="${f}">
         <div><label>Entry</label><input type="number" step="any" data-k="entry" value="${+st.entry.toPrecision(7)}"></div>
@@ -502,7 +578,7 @@ async function render(){
       ${st.size&&st.size*st.entry>cfg.capital?'<br><span class="wa">Positionswert übersteigt Kapital (Hebel nötig)</span>':''}
       ${an.rsi&&an.cls==='dn'&&st.dir==='Long'?'<br><span class="wa">Long gegen den Abwärtstrend</span>':''}
       <button data-act="reset" data-sym="${esc(a.symbol)}" style="margin-top:6px">Auto-Werte</button></div></div>
-    <div class="mu" style="margin-top:8px">Stand: ${hhmm(Date.now())} · Letzte Kerze vor ${age} h · Quelle: ${srcName(a)} · ${tf.toUpperCase()}<br>Zusatzdaten: ${[...(a.crypto?[]:[['Fundamental',r.fa]]),['News',r.nw&&r.nw.length],['Wochentrend',mtf],['Benchmark',rsx],['Backtest',bt]].map(([l,v])=>`<span class="${v?'up':'dn'}">${v?'✓':'✗'}</span> ${l}`).join(' · ')}</div>`;
+    <div class="mu" style="margin-top:8px">Stand: ${hhmm(Date.now())} · Letzte Kerze vor ${age} h · Quelle: ${srcName(a)} · ${tf.toUpperCase()}<br>Zusatzdaten: ${[...(a.crypto?[['Derivate',r.dr]]:[['Fundamental',r.fa]]),['News',r.nw&&r.nw.length],['Wochentrend',mtf],['Benchmark',rsx],['Backtest',bt],['Risiko/Verteilung',ax]].map(([l,v])=>`<span class="${v?'up':'dn'}">${v?'✓':'✗'}</span> ${l}`).join(' · ')}</div>`;
     $('#grid').insertBefore(card,$('#macro'));
     mkChart(card.querySelector('.ch'),d,an,st);
     checkAlerts(a,r.d[r.d.length-1].close);
@@ -525,17 +601,40 @@ function checkAlerts(a,price){
 
 /* ---------- Makro ---------- */
 async function loadMacro(){
-  const row=(l,k,v)=>`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--bd);color:var(--tx);font-size:.8rem"><span>${l}<button class="i" data-info="${k}">?</button></span><span>${v}</span></div>`;
-  const out=[];
+  const row=(l,k,v)=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:4px 0;border-bottom:1px solid var(--bd);color:var(--tx);font-size:.8rem"><span>${l}<button class="i" data-info="${k}">?</button></span><span style="text-align:right">${v}</span></div>`;
+  const yq=async sy=>{const k='M|'+sy,c=cache.get(k);if(c&&Date.now()-c.t<3e5)return c.d;
+    const j=await yChart(sy,'1d','6mo'),r=j.chart.result[0],cl=r.indicators.quote[0].close.filter(x=>x!=null);if(cl.length<55)throw new Error('x');
+    const l=cl[cl.length-1],p=cl[cl.length-2],sm=cl.slice(-50).reduce((x,y)=>x+y,0)/50,d={v:l,chg:(l/p-1)*100,vs:(l/sm-1)*100};cache.set(k,{t:Date.now(),d});return d};
+  const SY=['^VIX','DX-Y.NYB','^TNX','^IRX','GC=F','^GSPC','^GDAXI'];
   const jobs=[
     async()=>{const j=await getJSON('https://api.alternative.me/fng/?limit=1');const v=+j.data[0].value;return row('Fear &amp; Greed (Krypto)','fng',`<b class="${v<35?'dn':v>65?'wa':''}">${v}</b> ${esc(j.data[0].value_classification)}`)},
     async()=>{const j=await getJSON('https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT');const v=+j.lastFundingRate*100;return row('Funding BTC (8h)','fund',`<b class="${v>.05?'wa':''}">${fmt(v,4)} %</b>`)},
     async()=>{const j=await getJSON('https://api.coingecko.com/api/v3/global');return row('BTC-Dominanz','dom',`<b>${fmt(j.data.market_cap_percentage.btc,1)} %</b>`)},
     async()=>row('EUR/USD','fx',fx.live?`<b>${fmt(1/fx.r,4)}</b> <span class="mu">${fx.ts}</span>`:'<span class="wa">nicht live</span>')
   ];
-  const r=await Promise.allSettled(jobs.map(j=>j()));
-  r.forEach(x=>out.push(x.status==='fulfilled'?x.value:'<div class="mu" style="padding:4px 0">Quelle nicht erreichbar</div>'));
-  $('#macro-body').innerHTML=out.join('')+`<div class="mu" style="margin-top:8px">Stand: ${hhmm(Date.now())}. VIX, US-Zinsen, DXY und Wirtschaftskalender benötigen eine eigene Datenquelle und sind bewusst nicht mit Platzhaltern simuliert.</div>`;
+  const [rs,ys]=await Promise.all([Promise.allSettled(jobs.map(j=>j())),Promise.all(SY.map(sy=>soft(yq(sy),9000).catch(()=>null)))]);
+  const out=[];
+  const [vix,dxy,tnx,irx,gold,spx,dax]=ys;
+  const ch=x=>`<span class="${x.chg>=0?'up':'dn'}">${x.chg>=0?'+':''}${fmt(x.chg,1)} %</span>`;
+  const tr=x=>`<span class="mu">${x.vs>=0?'über':'unter'} 50-T-Schnitt</span>`;
+  const yl=x=>x>25?x/10:x;
+  const NA='<div class="mu" style="padding:4px 0">Quelle nicht erreichbar</div>';
+  let flags=0,known=0;
+  const mk=(x,l,k,f)=>x?row(l,k,f(x)):null;
+  const rows=[
+    mk(vix,'VIX','vix',x=>{known++;if(x.v>25)flags++;return `<b class="${x.v>25?'dn':x.v<16?'up':'wa'}">${fmt(x.v,1)}</b> ${ch(x)}`}),
+    mk(dxy,'Dollar-Index','dxy',x=>{known++;if(x.vs>2)flags++;return `<b>${fmt(x.v,1)}</b> ${ch(x)} ${tr(x)}`}),
+    mk(tnx,'US 10J-Rendite','tnx',x=>`<b>${fmt(yl(x.v),2)} %</b> ${tr(x)}`),
+    tnx&&irx?row('Zinskurve 10J – 3M','curve',(()=>{const c=yl(tnx.v)-yl(irx.v);known++;if(c<0)flags++;return `<b class="${c<0?'dn':'up'}">${c>=0?'+':''}${fmt(c,2)} PP</b> <span class="mu">${c<0?'invertiert':'normal'}</span>`})()):null,
+    mk(gold,'Gold','dxy',x=>`<b>${fmt(x.v,0)}</b> ${ch(x)} ${tr(x)}`),
+    mk(spx,'S&amp;P 500','dxy',x=>{known++;if(x.vs<0)flags++;return `<b>${fmt(x.v,0)}</b> ${ch(x)} ${tr(x)}`}),
+    mk(dax,'DAX','dxy',x=>`<b>${fmt(x.v,0)}</b> ${ch(x)} ${tr(x)}`)
+  ];
+  const reg=known>=3?(flags>=2?['Risk-Off','dn']:flags===0?['Risk-On','up']:['Neutral','wa']):null;
+  if(reg)out.push(row('Makro-Regime','mreg',`<b class="${reg[1]}">${reg[0]}</b> <span class="mu">${flags} von ${known} Risiko-Signalen</span>`));
+  rows.forEach(x=>out.push(x||NA));
+  rs.forEach(x=>out.push(x.status==='fulfilled'?x.value:NA));
+  $('#macro-body').innerHTML=out.join('')+`<div class="mu" style="margin-top:8px">Stand: ${hhmm(Date.now())}. Marktbreite, Kreditaufschläge und Wirtschaftskalender fehlen noch: dafür gibt es keine freie Quelle ohne Konto.</div>`;
 }
 
 /* ---------- Events ---------- */
@@ -613,8 +712,7 @@ $('#a-ok').onclick=async()=>{
 };
 document.querySelectorAll('.mo').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)close()}));
 document.addEventListener('keydown',e=>{if(e.key==='Escape')close()});
-function setAuto(){clearInterval(arT);if(cfg.auto>0)arT=setInterval(()=>{if(busy||document.hidden||document.querySelector('.mo.open')||document.activeElement?.tagName==='INPUT')return;render()},cfg.auto*60000)}
-setInterval(loadMacro,300000);
+function setAuto(){clearInterval(arT);if(cfg.auto>0)arT=setInterval(()=>{if(busy||document.hidden||document.querySelector('.mo.open')||document.activeElement?.tagName==='INPUT')return;render();loadMacro()},cfg.auto*60000)}
 
 document.body.dataset.theme=theme;
 $('#s-cp').onclick=async()=>{try{await navigator.clipboard.writeText($('#wk-src').textContent.trim());toast('Worker-Code kopiert')}catch(e){toast('Kopieren nicht möglich')}};
