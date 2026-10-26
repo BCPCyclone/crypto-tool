@@ -105,7 +105,7 @@ table{border-collapse:collapse;font-size:.75rem;width:100%}td,th{padding:4px 6px
 
 <script type="text/plain" id="wk-src">
 // Cloudflare Worker v4: CORS-Proxy für Yahoo Finance (/chart, /search, /fund, /summary) + KI (/ai)
-// KI: im Worker das Secret ANTHROPIC_KEY anlegen (wrangler secret put ANTHROPIC_KEY). Optional: Variable ALLOWED_ORIGIN (z. B. https://DEINNAME.github.io).
+// KI gratis: im Worker unter Settings → Bindings ein 'Workers AI'-Binding mit dem Namen AI anlegen. Optional statt dessen Claude: Secret ANTHROPIC_KEY. Optional: Variable ALLOWED_ORIGIN (z. B. https://DEINNAME.github.io).
 const UA = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36' };
 const MODS = 'financialData,recommendationTrend,calendarEvents,earningsTrend,defaultKeyStatistics,upgradeDowngradeHistory,netSharePurchaseActivity';
 let AUTH = { c: '', k: '', t: 0 };
@@ -134,12 +134,18 @@ export default {
     if (req.method === 'OPTIONS') return new Response(null, { headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'content-type' } });
     if (u.pathname === '/ai') {
       if (req.method !== 'POST') return err(405, 'POST erforderlich');
-      if (!env.ANTHROPIC_KEY) return err(500, 'Secret ANTHROPIC_KEY fehlt im Worker');
+      if (!env.ANTHROPIC_KEY && !env.AI) return err(500, 'Im Worker fehlt das Binding AI (Workers AI) oder das Secret ANTHROPIC_KEY');
       if (env.ALLOWED_ORIGIN && req.headers.get('Origin') !== env.ALLOWED_ORIGIN) return err(403, 'Origin nicht erlaubt');
       const raw = await req.text();
       if (raw.length > 40000) return err(413, 'Anfrage zu groß');
       let b; try { b = JSON.parse(raw); } catch (e) { return err(400, 'ungültiges JSON'); }
       if (!Array.isArray(b.messages) || !b.messages.length || b.messages.length > 6) return err(400, 'bad request');
+      if (!env.ANTHROPIC_KEY) {
+        try {
+          const o = await env.AI.run('@cf/meta/llama-3.3-70b-instruct-fp8-fast', { messages: [{ role: 'system', content: String(b.system || '').slice(0, 4000) }, ...b.messages], max_tokens: 1200 });
+          return new Response(JSON.stringify({ content: [{ type: 'text', text: String(o.response || '') }] }), { headers: cors });
+        } catch (e) { return err(502, 'Workers AI: ' + (e.message || e)); }
+      }
       const r = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: { 'x-api-key': env.ANTHROPIC_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
@@ -149,7 +155,7 @@ export default {
     }
     let target;
     if (u.pathname === '/') {
-      return new Response('{"ok":true,"version":4,"ai":' + (env && env.ANTHROPIC_KEY ? 'true' : 'false') + '}', { headers: cors });
+      return new Response('{"ok":true,"version":4,"ai":' + (env && (env.ANTHROPIC_KEY || env.AI) ? 'true' : 'false') + '}', { headers: cors });
     } else if (u.pathname === '/chart') {
       const i = u.searchParams.get('interval') || '1d';
       const r = u.searchParams.get('range') || '1y';
@@ -799,7 +805,7 @@ function aiShow(box,o,t){
 async function aiAsset(y){
   const box=document.querySelector(`.ai[data-sym="${CSS.escape(y)}"]`),c=AIC[y];if(!box||!c)return;
   box.style.display='';box.innerHTML='<span class="mu">KI analysiert …</span>';
-  try{const o=JSON.parse((await aiCall(AIS,[{role:'user',content:JSON.stringify(c)}])).replace(/```json|```/g,'').trim());LS.set(aiKey(y),{t:Date.now(),o});aiShow(box,o,Date.now())}
+  try{const t=await aiCall(AIS,[{role:'user',content:JSON.stringify(c)}]),o=JSON.parse(t.slice(t.indexOf('{'),t.lastIndexOf('}')+1));LS.set(aiKey(y),{t:Date.now(),o});aiShow(box,o,Date.now())}
   catch(e){box.innerHTML=`<span class="err">KI-Fehler: ${esc(e.message)}</span>`}
 }
 async function aiAsk(y){
