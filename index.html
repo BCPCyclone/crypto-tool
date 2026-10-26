@@ -49,6 +49,7 @@ input,select{width:100%;padding:7px;border:1px solid var(--bd);border-radius:6px
 #toast{position:fixed;top:calc(10px + env(safe-area-inset-top));left:10px;right:10px;z-index:200;display:flex;flex-direction:column;gap:6px}
 #toast div{background:var(--ac);color:#fff;padding:10px;border-radius:8px;font-size:.82rem}
 table{border-collapse:collapse;font-size:.75rem;width:100%}td,th{padding:4px 6px;text-align:center;border:1px solid var(--bd)}
+.ai{background:var(--inf);border-radius:8px;padding:9px;margin-top:8px;font-size:.78rem;line-height:1.55}.ai h4{font-size:.78rem;margin:6px 0 2px}.ai ul{padding-left:16px}.ai p{margin:4px 0}
 </style>
 </head>
 <body data-theme="light">
@@ -66,7 +67,7 @@ table{border-collapse:collapse;font-size:.75rem;width:100%}td,th{padding:4px 6px
 <div class="mu" id="status" style="margin-top:6px"></div>
 
 <div class="grid" id="grid">
-  <div class="card" id="macro"><div class="nm">Marktumfeld (live)</div><div id="macro-body" class="mu" style="margin-top:6px">Lade …</div></div>
+  <div class="card" id="macro"><div class="nm">Marktumfeld (live)</div><div id="macro-body" class="mu" style="margin-top:6px">Lade …</div><div class="row" style="margin-top:8px"><button data-act="aim">🤖 KI-Briefing</button></div><div class="ai" id="ai-macro" style="display:none"></div></div>
   <div class="card" id="corr" style="display:none"><div class="nm">Korrelation (90 Tage, Tagesrenditen)<button class="i" data-info="corr">?</button></div><div id="corr-body" style="margin-top:8px"></div></div>
   <div class="card"><div class="nm">Hinweise</div>
     <div class="dis" style="margin-top:6px">
@@ -90,7 +91,7 @@ table{border-collapse:collapse;font-size:.75rem;width:100%}td,th{padding:4px 6px
 
 <div class="mo" id="m-set"><div class="mc"><h3>Einstellungen</h3>
   <div class="fg"><label>Twelve-Data API-Key (für Aktien, bleibt nur in diesem Browser)</label><input id="s-k" type="password" autocomplete="off"></div>
-  <div class="fg"><label>Eigener Yahoo-Proxy (optional, stabiler) – Worker-URL</label><input id="s-p" type="url" autocomplete="off" placeholder="https://…workers.dev"></div>
+  <div class="fg"><label>Eigener Worker-Proxy (Yahoo stabiler + KI-Analyse) – Worker-URL</label><input id="s-p" type="url" autocomplete="off" placeholder="https://…workers.dev"></div>
   <details class="mu" style="margin-bottom:10px"><summary>Eigenen Proxy einrichten</summary>
     <div style="margin:6px 0;line-height:1.5">1. Konto auf dash.cloudflare.com anlegen.<br>2. Workers &amp; Pages → Create → Create Worker → Deploy → Edit code.<br>3. Alten Code löschen, den kopierten Code (Version 3) einfügen, Deploy. Nach App-Updates den Code erneut einfügen.<br>4. Die Worker-URL oben eintragen.</div>
     <button id="s-cp">Worker-Code kopieren</button></details>
@@ -103,7 +104,8 @@ table{border-collapse:collapse;font-size:.75rem;width:100%}td,th{padding:4px 6px
   <div class="row" style="justify-content:flex-end"><button class="pri" data-close>Verstanden</button></div></div></div>
 
 <script type="text/plain" id="wk-src">
-// Cloudflare Worker v3: CORS-Proxy für Yahoo Finance (/chart, /search, /fund, /summary)
+// Cloudflare Worker v4: CORS-Proxy für Yahoo Finance (/chart, /search, /fund, /summary) + KI (/ai)
+// KI: im Worker das Secret ANTHROPIC_KEY anlegen (wrangler secret put ANTHROPIC_KEY). Optional: Variable ALLOWED_ORIGIN (z. B. https://DEINNAME.github.io).
 const UA = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36' };
 const MODS = 'financialData,recommendationTrend,calendarEvents,earningsTrend,defaultKeyStatistics,upgradeDowngradeHistory,netSharePurchaseActivity';
 let AUTH = { c: '', k: '', t: 0 };
@@ -122,16 +124,32 @@ async function auth(force) {
 }
 
 export default {
-  async fetch(req) {
+  async fetch(req, env) {
     const u = new URL(req.url);
     const cors = { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' };
     // Optional: '*' durch deine GitHub-Pages-Adresse ersetzen, z. B. 'https://DEINNAME.github.io'
     const err = (code, msg) => new Response(JSON.stringify({ error: msg, message: msg }), { status: code, headers: cors });
     const sym = u.searchParams.get('symbol') || '';
     const okSym = /^[A-Za-z0-9.^=-]{1,20}$/.test(sym);
+    if (req.method === 'OPTIONS') return new Response(null, { headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'content-type' } });
+    if (u.pathname === '/ai') {
+      if (req.method !== 'POST') return err(405, 'POST erforderlich');
+      if (!env.ANTHROPIC_KEY) return err(500, 'Secret ANTHROPIC_KEY fehlt im Worker');
+      if (env.ALLOWED_ORIGIN && req.headers.get('Origin') !== env.ALLOWED_ORIGIN) return err(403, 'Origin nicht erlaubt');
+      const raw = await req.text();
+      if (raw.length > 40000) return err(413, 'Anfrage zu groß');
+      let b; try { b = JSON.parse(raw); } catch (e) { return err(400, 'ungültiges JSON'); }
+      if (!Array.isArray(b.messages) || !b.messages.length || b.messages.length > 6) return err(400, 'bad request');
+      const r = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'x-api-key': env.ANTHROPIC_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+        body: JSON.stringify({ model: 'claude-sonnet-5-5', max_tokens: 1200, system: String(b.system || '').slice(0, 4000), messages: b.messages })
+      });
+      return new Response(r.body, { status: r.status, headers: cors });
+    }
     let target;
     if (u.pathname === '/') {
-      return new Response('{"ok":true,"version":3}', { headers: cors });
+      return new Response('{"ok":true,"version":4,"ai":' + (env && env.ANTHROPIC_KEY ? 'true' : 'false') + '}', { headers: cors });
     } else if (u.pathname === '/chart') {
       const i = u.searchParams.get('interval') || '1d';
       const r = u.searchParams.get('range') || '1y';
@@ -607,6 +625,7 @@ async function render(){
     const vzS=vpAll?vpAll.nodes.filter(n=>n.p<an.last).map(n=>n.p).sort((x,y)=>y-x):[],vzR=vpAll?vpAll.nodes.filter(n=>n.p>an.last).map(n=>n.p).sort((x,y)=>x-y):[];
     const ayx=r.ay&&!r.ay.err?{tm:r.ay.tm!=null?r.ay.tm*f:null,up:r.ay.tm!=null?(r.ay.tm*f/an.last-1)*100:null,n:r.ay.n,rm:r.ay.rm,rkl:RK[r.ay.rk]||'',days:r.ay.ed?Math.round((r.ay.ed-Date.now()/1000)/86400):null}:null;
     const vd=verdict(an,st,vol,s,r.fa,r.nw,{mtf,rs:rsx,bt,ax,dr:r.dr,ay:ayx,vz:{sup:vzS.length?vzS[0]:null,res:vzR.length?vzR[0]:null}});
+    AIC[a.symbol]={asset:a.name,symbol:a.symbol,typ:a.crypto?'Krypto':'Aktie/ETF',zeitrahmen:tf,waehrung:cur,kurs:an.last,aenderung_pct:+an.chg.toFixed(2),trend:an.regime,ema_kreuz:an.cross,rsi:an.rsi?+an.rsi.toFixed(1):null,macd_hist_positiv:an.hist>=0,atr_pct:+(an.atr/an.last*100).toFixed(2),support:an.sup,resistance:an.res,fibonacci:an.fib.map(x=>+x.v.toFixed(4)),setup:{richtung:st.dir,entry:st.entry,stop:st.stop,ziel:st.target,crv:st.crv},vola_jahr_pct:vol?+(vol.ann*100).toFixed(0):null,trend_tag_vs_woche:mtf?[mtf.d.cls,mtf.w.cls]:null,rel_staerke:rsx?{vs:rsx.name,r6:rsx.r6,stark:rsx.strong}:null,fundamental:r.fa||null,analysten:ayx||null,derivate:r.dr||null,schlagzeilen:(r.nw||[]).map(x=>x.t),regelbasiertes_urteil:vd.lab,regelbasierte_begruendung:vd.html.replace(/<[^>]+>/g,'')};
     const LB={up:'Aufwärtstrend',dn:'Abwärtstrend',wa:'Übergangsphase'};
     const mtfRow=mtf?`<dt>Mehrzeitebenen<button class="i" data-info="mtf">?</button></dt><dd>Tag ${dd.arrow} · Woche ${ww.arrow}<br><span class="${dd.cls===ww.cls&&dd.cls!=='wa'?dd.cls:'wa'}">${dd.cls===ww.cls?(dd.cls==='wa'?'beide ohne Richtung':'übereinstimmend'):'widersprüchlich'}</span></dd>`:'';
     const rsRow=rsx?`<dt>Rel. Stärke vs ${esc(rsx.name)}<button class="i" data-info="rs">?</button></dt><dd>${[['3 Mon',rsx.r3],['6 Mon',rsx.r6],['1 J',rsx.r12]].filter(x=>x[1]!=null).map(([l,v])=>`${l} <span class="${v>=0?'up':'dn'}">${v>=0?'+':''}${fmt(v,1)} %</span>`).join(' · ')}<br><span class="${rsx.strong?'up':'dn'}">${rsx.strong?'Trend: stärker':'Trend: schwächer'}</span></dd>`:'';
@@ -678,6 +697,7 @@ async function render(){
       <span class="tag ${an.cls}">${an.arrow} ${an.regime}</span></div>
       <div class="row" style="align-items:flex-start"><button data-act="alert" data-sym="${esc(a.symbol)}" title="Preisalarm">🔔${al||''}</button><button data-act="del" data-sym="${esc(a.symbol)}">✕</button></div></div>
     <div style="background:var(--inf);border-radius:8px;padding:9px;margin-top:8px;font-size:.78rem;line-height:1.55"><b>Bewertung:</b> ${vd.html}</div>
+    <div class="row" style="margin-top:8px"><button class="pri" data-act="ai" data-sym="${esc(a.symbol)}">🤖 KI-Analyse</button></div><div class="ai" data-sym="${esc(a.symbol)}" style="display:none"></div>
     <div class="ch" id="ch-${esc(a.symbol.replace(/[^A-Z0-9]/g,'_'))}"></div>
     <div class="mu">Grün: EMA 50 · Gelb: EMA 200 · Grau gestrichelt: Fibonacci</div>
     <dl>
@@ -702,6 +722,7 @@ async function render(){
     <div class="mu" style="margin-top:8px">Stand: ${hhmm(Date.now())} · Letzte Kerze vor ${age} h · Quelle: ${srcName(a)} · ${tf.toUpperCase()}<br>Zusatzdaten: ${[...(a.crypto?[['Derivate',r.dr]]:[['Fundamental',r.fa]]),...(!a.crypto&&cfg.proxy&&a.src==='yahoo'?[['Analysten',r.ay&&!r.ay.err]]:[]),['News',r.nw&&r.nw.length],['Wochentrend',mtf],['Benchmark',rsx],['Backtest',bt],['Risiko/Verteilung',ax]].map(([l,v])=>`<span class="${v?'up':'dn'}">${v?'✓':'✗'}</span> ${l}`).join(' · ')}</div>`;
     $('#grid').insertBefore(card,$('#macro'));
     mkChart(card.querySelector('.ch'),d,an,st);
+    {const h=LS.get(aiKey(a.symbol),null);if(h&&Date.now()-h.t<18e5)aiShow(card.querySelector('.ai'),h.o,h.t)}
     checkAlerts(a,r.d[r.d.length-1].close);
   });
   $('#status').textContent=act.length?`Währung: ${cur} (EUR/USD ${fmt(fx.r,4)}${fx.live?' live, '+fx.ts:' – Fallback, nicht live'}) · Auto-Update: ${cfg.auto?cfg.auto+' Min':'aus'}`:'Wähle oben ein Asset aus oder füge eins hinzu.';
@@ -758,6 +779,42 @@ async function loadMacro(){
   $('#macro-body').innerHTML=out.join('')+`<div class="mu" style="margin-top:8px">Stand: ${hhmm(Date.now())}. Marktbreite, Kreditaufschläge und Wirtschaftskalender fehlen noch: dafür gibt es keine freie Quelle ohne Konto.</div>`;
 }
 
+/* ---------- KI ---------- */
+const AIC={},AIO={},aiKey=y=>'qt7_ai_'+y+'_'+tf+'_'+cur;
+const AIS=`Du bist ein nüchterner Research-Analyst für ein Multi-Asset-Dashboard. Du bekommst fertig berechnete Marktdaten als JSON. Rechne nichts neu und erfinde keine Zahlen, Kurse oder Ereignisse; nutze nur die gelieferten Werte. Trenne Fakt, Signal und Szenario. Suche gezielt nach Widersprüchen zwischen den Signalen (z. B. Tages- vs. Wochentrend, Trend vs. Fundamentaldaten, Funding/Positionierung vs. Preis). Bewerte die Schlagzeilen nach Relevanz, nicht nach Stichworten. Keine Anlageberatung, keine Kauf-/Verkaufsempfehlung; benenne Unsicherheit offen. Antworte NUR mit JSON ohne Markdown: {"einordnung":"max. 4 Sätze","widersprueche":["..."],"ungueltig_wenn":["konkrete Preis- oder Datenbedingung, bei der das Setup hinfällig wäre"],"nachrichten":{"stimmung":"positiv|neutral|negativ|gemischt|keine","begruendung":"1-2 Sätze"},"konfidenz":"niedrig|mittel|hoch"}`;
+const AIQ='Beantworte die Frage zum Asset auf Deutsch, knapp (max. 5 Sätze), nur auf Basis der gelieferten Daten. Gibt die Datenlage es nicht her, sag das. Keine Anlageberatung.';
+const AIM='Fasse die Marktumfeld-Daten auf Deutsch in 3 bis 4 Sätzen zusammen: Risk-on oder Risk-off, was treibt das Bild, was ist auffällig. Nur gelieferte Werte nutzen, keine Prognosen, keine Anlageberatung. Reiner Text.';
+async function aiCall(system,messages){
+  if(!cfg.proxy)throw new Error('Dafür brauchst du den eigenen Worker unter ⚙ (mit Route /ai und Secret ANTHROPIC_KEY).');
+  const r=await fetch(cfg.proxy+'/ai',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({system,messages}),signal:AbortSignal.timeout?AbortSignal.timeout(45000):undefined});
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok){const m=j.error;throw new Error((typeof m==='string'?m:m&&m.message)||j.message||'HTTP '+r.status)}
+  return(j.content||[]).map(x=>x.text||'').join('').trim();
+}
+const aiLi=(t,l)=>l&&l.length?`<h4>${t}</h4><ul>${l.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:'';
+function aiShow(box,o,t){
+  if(!box)return;const y=box.dataset.sym;AIO[y]=o;box.style.display='';
+  box.innerHTML=`<b>KI-Einordnung</b> <span class="mu">Konfidenz: ${esc(o.konfidenz||'–')}${t?' · Stand '+hhmm(t):''}</span><p>${esc(o.einordnung||'')}</p>`+aiLi('Widersprüche',o.widersprueche)+aiLi('Ungültig, wenn',o.ungueltig_wenn)+(o.nachrichten&&o.nachrichten.stimmung&&o.nachrichten.stimmung!=='keine'?`<h4>Nachrichten: ${esc(o.nachrichten.stimmung)}</h4><div>${esc(o.nachrichten.begruendung||'')}</div>`:'')+`<div class="row" style="margin-top:8px;flex-wrap:nowrap"><input class="ai-q" placeholder="Frage zu diesem Asset …"><button data-act="aiq" data-sym="${esc(y)}">Fragen</button></div><div class="ai-a" style="margin-top:6px"></div><div class="mu" style="margin-top:6px">Von KI auf Basis der berechneten Werte erzeugt, kein Anlagerat, kann sich irren. Die regelbasierte Bewertung oben bleibt unverändert.</div>`;
+}
+async function aiAsset(y){
+  const box=document.querySelector(`.ai[data-sym="${CSS.escape(y)}"]`),c=AIC[y];if(!box||!c)return;
+  box.style.display='';box.innerHTML='<span class="mu">KI analysiert …</span>';
+  try{const o=JSON.parse((await aiCall(AIS,[{role:'user',content:JSON.stringify(c)}])).replace(/```json|```/g,'').trim());LS.set(aiKey(y),{t:Date.now(),o});aiShow(box,o,Date.now())}
+  catch(e){box.innerHTML=`<span class="err">KI-Fehler: ${esc(e.message)}</span>`}
+}
+async function aiAsk(y){
+  const box=document.querySelector(`.ai[data-sym="${CSS.escape(y)}"]`),inp=box&&box.querySelector('.ai-q'),out=box&&box.querySelector('.ai-a'),q=inp&&inp.value.trim();if(!q)return;
+  out.innerHTML='<span class="mu">…</span>';
+  try{const t=await aiCall(AIQ,[{role:'user',content:'Daten: '+JSON.stringify(AIC[y])+'\nBisherige KI-Einordnung: '+JSON.stringify(AIO[y]||{})+'\n\nFrage: '+q}]);out.innerHTML=`<b>Antwort:</b> ${esc(t).replace(/\n/g,'<br>')}`}
+  catch(e){out.innerHTML=`<span class="err">KI-Fehler: ${esc(e.message)}</span>`}
+}
+async function aiMacro(){
+  const b=$('#ai-macro');b.style.display='';b.innerHTML='<span class="mu">KI fasst zusammen …</span>';
+  try{const t=await aiCall(AIM,[{role:'user',content:$('#macro-body').innerText.slice(0,3000)}]);b.innerHTML=`<b>KI-Briefing</b> <span class="mu">${hhmm(Date.now())}</span><p>${esc(t)}</p><div class="mu">Von KI erzeugt, kein Anlagerat.</div>`}
+  catch(e){b.innerHTML=`<span class="err">KI-Fehler: ${esc(e.message)}</span>`}
+}
+document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.classList&&e.target.classList.contains('ai-q'))aiAsk(e.target.closest('.ai').dataset.sym)});
+
 /* ---------- Events ---------- */
 document.addEventListener('click',e=>{
   const t=e.target.closest('[data-info],[data-act],[data-close]');if(!t)return;
@@ -765,6 +822,9 @@ document.addEventListener('click',e=>{
   if(t.dataset.info){const i=INFO[t.dataset.info];$('#inf-t').textContent=i[0];$('#inf-b').textContent=i[1];return open('#m-inf')}
   const s=t.dataset.sym,act=t.dataset.act;
   if(act==='chip'){sel=sel.includes(s)?sel.filter(x=>x!==s):[...sel,s].slice(-3);LS.set('qt7_sel',sel);render()}
+  if(act==='ai')aiAsset(s);
+  if(act==='aiq')aiAsk(s);
+  if(act==='aim')aiMacro();
   if(act==='vp'){vpOn=!vpOn;LS.set('qt7_vp',vpOn);render()}
   if(act==='tf'){tf=s;LS.set('qt7_tf',tf);render()}
   if(act==='del'&&confirm('Asset wirklich löschen?')){assets=assets.filter(a=>a.symbol!==s);sel=sel.filter(x=>x!==s);LS.set('qt7_assets',assets);LS.set('qt7_sel',sel);render()}
