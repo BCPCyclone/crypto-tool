@@ -143,7 +143,7 @@ export default {
       if (!env.ANTHROPIC_KEY) {
         try {
           const o = await env.AI.run('@cf/meta/llama-3.3-70b-instruct-fp8-fast', { messages: [{ role: 'system', content: String(b.system || '').slice(0, 4000) }, ...b.messages], max_tokens: 1200 });
-          return new Response(JSON.stringify({ content: [{ type: 'text', text: String(o.response || '') }] }), { headers: cors });
+          return new Response(JSON.stringify({ content: [{ type: 'text', text: typeof o.response === 'string' ? o.response : JSON.stringify(o.response ?? o.result ?? '') }] }), { headers: cors });
         } catch (e) { return err(502, 'Workers AI: ' + (e.message || e)); }
       }
       const r = await fetch('https://api.anthropic.com/v1/messages', {
@@ -805,7 +805,7 @@ function aiShow(box,o,t){
 async function aiAsset(y){
   const box=document.querySelector(`.ai[data-sym="${CSS.escape(y)}"]`),c=AIC[y];if(!box||!c)return;
   box.style.display='';box.innerHTML='<span class="mu">KI analysiert …</span>';
-  try{const t=await aiCall(AIS,[{role:'user',content:JSON.stringify(c)}]),o=JSON.parse(t.slice(t.indexOf('{'),t.lastIndexOf('}')+1));LS.set(aiKey(y),{t:Date.now(),o});aiShow(box,o,Date.now())}
+  try{const t=await aiCall(AIS,[{role:'user',content:JSON.stringify(c)}]),a=t.indexOf('{'),z=t.lastIndexOf('}');if(a<0||z<a)throw new Error('Keine gültige KI-Antwort, bitte nochmal tippen. Erhalten: '+(t.slice(0,80)||'leer'));const o=JSON.parse(t.slice(a,z+1));LS.set(aiKey(y),{t:Date.now(),o});aiShow(box,o,Date.now())}
   catch(e){box.innerHTML=`<span class="err">KI-Fehler: ${esc(e.message)}</span>`}
 }
 async function aiAsk(y){
