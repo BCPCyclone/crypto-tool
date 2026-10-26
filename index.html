@@ -797,10 +797,10 @@ async function aiCall(system,messages){
   if(!r.ok){const m=j.error;throw new Error((typeof m==='string'?m:m&&m.message)||j.message||'HTTP '+r.status)}
   return(j.content||[]).map(x=>x.text||'').join('').trim();
 }
-const aiLi=(t,l)=>l&&l.length?`<h4>${t}</h4><ul>${l.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:'';
+const aiLi=(t,l)=>{l=Array.isArray(l)?l:l?[l]:[];return l.length?`<h4>${t}</h4><ul>${l.map(x=>`<li>${esc(typeof x==='string'?x:JSON.stringify(x))}</li>`).join('')}</ul>`:''};
 function aiShow(box,o,t){
-  if(!box)return;const y=box.dataset.sym;AIO[y]=o;box.style.display='';
-  box.innerHTML=`<b>KI-Einordnung</b> <span class="mu">Konfidenz: ${esc(o.konfidenz||'–')}${t?' · Stand '+hhmm(t):''}</span><p>${esc(o.einordnung||'')}</p>`+aiLi('Widersprüche',o.widersprueche)+aiLi('Ungültig, wenn',o.ungueltig_wenn)+(o.nachrichten&&o.nachrichten.stimmung&&o.nachrichten.stimmung!=='keine'?`<h4>Nachrichten: ${esc(o.nachrichten.stimmung)}</h4><div>${esc(o.nachrichten.begruendung||'')}</div>`:'')+`<div class="row" style="margin-top:8px;flex-wrap:nowrap"><input class="ai-q" placeholder="Frage zu diesem Asset …"><button data-act="aiq" data-sym="${esc(y)}">Fragen</button></div><div class="ai-a" style="margin-top:6px"></div><div class="mu" style="margin-top:6px">Von KI auf Basis der berechneten Werte erzeugt, kein Anlagerat, kann sich irren. Die regelbasierte Bewertung oben bleibt unverändert.</div>`;
+  if(!box)return;if(o.nachrichten&&typeof o.nachrichten==='string')o.nachrichten={stimmung:'',begruendung:o.nachrichten};const y=box.dataset.sym;AIO[y]=o;box.style.display='';
+  box.innerHTML=`<b>KI-Einordnung</b> <span class="mu">Konfidenz: ${esc(o.konfidenz||'–')}${t?' · Stand '+hhmm(t):''}</span><p>${esc(o.einordnung||'')}</p>`+aiLi('Widersprüche',o.widersprueche)+aiLi('Ungültig, wenn',o.ungueltig_wenn)+(o.nachrichten&&o.nachrichten.begruendung&&o.nachrichten.stimmung!=='keine'?`<h4>Nachrichten${o.nachrichten.stimmung?': '+esc(o.nachrichten.stimmung):''}</h4><div>${esc(o.nachrichten.begruendung||'')}</div>`:'')+`<div class="row" style="margin-top:8px;flex-wrap:nowrap"><input class="ai-q" placeholder="Frage zu diesem Asset …"><button data-act="aiq" data-sym="${esc(y)}">Fragen</button></div><div class="ai-a" style="margin-top:6px"></div><div class="mu" style="margin-top:6px">Von KI auf Basis der berechneten Werte erzeugt, kein Anlagerat, kann sich irren. Die regelbasierte Bewertung oben bleibt unverändert.</div>`;
 }
 async function aiAsset(y){
   const box=document.querySelector(`.ai[data-sym="${CSS.escape(y)}"]`),c=AIC[y];if(!box||!c)return;
