@@ -226,6 +226,13 @@ const INFO={
  rs:['Relative Stärke','Vergleich mit einer Benchmark (Krypto: Bitcoin; Bitcoin: S&P 500; deutsche Aktien: DAX; sonst S&P 500). Der Wert zeigt, wie sich das Kursverhältnis Asset/Benchmark über 3, 6 und 12 Monate verändert hat. Plus = das Asset war stärker. Der Trend vergleicht das aktuelle Verhältnis mit seinem 50-Tage-Schnitt.'],
  bt:['Backtest','Prüft rückwirkend, wie sich das Asset nach jedem früheren Tag mit demselben Technik-Score entwickelte (Trend, MACD, RSI, EMA-Kreuz). Gezeigt werden durchschnittliche Rendite und Trefferquote für die Haltedauer, verglichen mit allen Tagen. Es nutzt nur Daten bis zum jeweiligen Tag, enthält aber keine Gebühren, überlappende Zeiträume und keine Fundamentaldaten oder Nachrichten. Vergangenes Verhalten ist keine Garantie.'],
  fa:['Fundamentaldaten','KGV/KBV/KUV = Kurs im Verhältnis zu Gewinn, Buchwert und Umsatz. EV/EBITDA = Unternehmenswert zu operativem Gewinn. Umsatzwachstum und Nettomarge stammen aus den letzten Jahresberichten, Schulden/Eigenkapital zeigt die Verschuldung. Die Daten kommen inoffiziell von Yahoo und können fehlen oder verzögert sein.'],
+ adx:['ADX (Trendstärke)','Misst, wie stark ein Trend ist, nicht in welche Richtung. Über 25 = Trend, unter 20 = Seitwärtsmarkt. +DI über −DI spricht für Aufwärtsdruck. In Seitwärtsphasen sind EMA-Signale unzuverlässig.'],
+ sq:['Bollinger-Squeeze','Bandbreite der Bollinger-Bänder (20 Kerzen, 2σ) im Vergleich zu den letzten 120 Kerzen. Sehr niedriges Perzentil = Verengung, oft folgt eine größere Bewegung, aber die Richtung ist offen.'],
+ struct:['Marktstruktur','Vergleicht die letzten zwei Pivot-Hochs und -Tiefs. Höhere Hochs und Tiefs = Aufwärtsstruktur, tiefere = Abwärtsstruktur. Ein Strukturbruch liegt vor, wenn der Kurs das letzte Pivot-Hoch überschreitet oder das letzte Pivot-Tief unterschreitet; gegen die bisherige Struktur ist das ein frühes Warnsignal für eine Trendwende.'],
+ div:['RSI-Divergenz','Bullisch: Der Kurs macht ein tieferes Tief, der RSI aber ein höheres. Bärisch: höheres Hoch im Kurs, niedrigeres im RSI. Zeigt nachlassenden Schwung, ist aber kein Timing-Signal. Geprüft werden die letzten 90 Kerzen.'],
+ vreg:['Volatilitäts-Regime','ATR in % des Kurses als Perzentil der letzten 250 Kerzen. EWMA-Vola gewichtet jüngste Tage stärker (Faktor 0,94) und zeigt, ob der Markt gerade unruhiger oder ruhiger ist als im Jahresschnitt. Hohe Volatilität verlangt weitere Stops und kleinere Positionen.'],
+ boot:['Bootstrap-Spanne','Statt einer Normalverteilung werden echte historische Tagesrenditen in 5-Tage-Blöcken neu gemischt (1.500 Durchläufe, bis zu 6 Jahre Historie, Drift entfernt). Dadurch zeigen sich Extremereignisse („Fat Tails“) realistischer als im 1σ-Kegel. 68 % = P16 bis P84, 90 % = P5 bis P95. Das ist eine Spannweite, keine Prognose.'],
+ sbt:['Setup-Backtest und Faktorprüfung','Testet das Trade-Setup historisch: Einstieg bei Signal „konstruktiv“ (Long) bzw. „vorsichtig“ (Short), Stop 2 ATR, Ziel 3 ATR, max. Haltedauer, Kosten je Trade, keine überlappenden Trades. Ergebnis in R (1 R = Risiko bis Stop). Bei gleichzeitiger Berührung von Stop und Ziel zählt der Stop. Die Regeln wurden nicht optimiert; die letzten 40 % der Historie zeigen daher, ob der Vorteil auch in ungesehenen Daten hält. Die Faktorprüfung zeigt, welche Teil-Signale des Scores historisch tatsächlich einen Renditeunterschied brachten. Vorsicht bei wenigen Trades.'],
  news:['Nachrichten und Stimmung','Aktuelle Schlagzeilen von Yahoo. Die Stimmung wird nur grob per Stichwortliste (deutsch/englisch) aus den Überschriften geschätzt und ersetzt nicht das Lesen der Meldungen.']
 };
 const DEF=[{symbol:'BTCUSDT',name:'Bitcoin',crypto:true,curr:'USD'},{symbol:'ETHUSDT',name:'Ethereum',crypto:true,curr:'USD'},{symbol:'SOLUSDT',name:'Solana',crypto:true,curr:'USD'}];
@@ -482,12 +489,12 @@ async function history(a){
   let d;
   if(a.crypto){let end=Date.now(),all=[];
     for(let i=0;i<3;i++){const j=await getJSON(`https://api.binance.com/api/v3/klines?symbol=${a.symbol}&interval=1d&limit=1000&endTime=${end}`);if(!j.length)break;all=j.concat(all);end=j[0][0]-1;if(j.length<1000)break}
-    d=all.map(x=>({time:Math.floor(x[0]/1000),close:+x[4]}));
+    d=all.map(x=>({time:Math.floor(x[0]/1000),close:+x[4],high:+x[2],low:+x[3]}));
   }else if(a.src==='yahoo'){
     const j=await yChart(a.symbol,'1d','10y'),r=j.chart&&j.chart.result&&j.chart.result[0];
     if(!r||!r.timestamp)throw new Error('Keine Historie');
-    const cl=r.indicators.quote[0].close;d=[];r.timestamp.forEach((t,i)=>{if(cl[i]!=null)d.push({time:t,close:cl[i]})});
-  }else d=(await candles(a,'1d')).map(x=>({time:x.time,close:x.close}));
+    const q0=r.indicators.quote[0],cl=q0.close;d=[];r.timestamp.forEach((t,i)=>{if(cl[i]!=null)d.push({time:t,close:cl[i],high:(q0.high&&q0.high[i])??cl[i],low:(q0.low&&q0.low[i])??cl[i]})});
+  }else d=(await candles(a,'1d')).map(x=>({time:x.time,close:x.close,high:x.high,low:x.low}));
   d=d.filter((x,i)=>isFinite(x.close)&&(i===0||x.time>d[i-1].time));
   cache.set(k,{t:Date.now(),d});return d;
 }
@@ -503,7 +510,10 @@ function btSeries(d){
     if(rs[i]>70)q--;else if(rs[i]<30)q++;
     for(let j=i;j>i-20;j--){const x=e50[j]-e200[j],y=e50[j-1]-e200[j-1];if(x>0&&y<=0){q++;break}if(x<0&&y>=0){q--;break}}
     sc[i]=q}
-  return sc;
+  const cp={t:[],m:[],r:[],x:[]};
+  for(let i=200;i<n;i++){const a=c[i]>e200[i],b=e50[i]>e200[i];cp.t[i]=a&&b?1:!a&&!b?-1:0;cp.m[i]=(m[i]-sg[i])>=0?1:-1;cp.r[i]=rs[i]>70?-1:rs[i]<30?1:0;let x=0;
+    for(let j=i;j>i-20;j--){const u=e50[j]-e200[j],v=e50[j-1]-e200[j-1];if(u>0&&v<=0){x=1;break}if(u<0&&v>=0){x=-1;break}}cp.x[i]=x}
+  sc.cp=cp;return sc;
 }
 const sts=a=>a.length?{n:a.length,avg:a.reduce((x,y)=>x+y,0)/a.length*100,hit:a.filter(x=>x>0).length/a.length*100}:{n:0,avg:null,hit:null};
 function backtest(d,crypto){
@@ -550,6 +560,64 @@ function seasonality(d){
   return by.map(a=>a.length>=4?{avg:a.reduce((x,y)=>x+y,0)/a.length*100,hit:a.filter(x=>x>0).length/a.length*100,n:a.length}:null);
 }
 function analytics(hi,crypto,cur){return{risk:riskStats(hi,crypto),dist:fwdDist(hi,crypto,btSeries(hi),cur),season:seasonality(hi)}}
+/* ---------- Erweiterte Technik / Validierung ---------- */
+function trSeries(d){return d.map((x,i)=>i?Math.max(x.high-x.low,Math.abs(x.high-d[i-1].close),Math.abs(x.low-d[i-1].close)):x.high-x.low)}
+function wilder(a,n=14){const o=new Array(a.length).fill(null);if(a.length<=n)return o;let s=a.slice(1,n+1).reduce((p,q)=>p+q,0)/n;o[n]=s;for(let i=n+1;i<a.length;i++){s=(s*(n-1)+a[i])/n;o[i]=s}return o}
+function rsiSeries(c,n=14){const o=new Array(c.length).fill(null);if(c.length<=n)return o;let g=0,l=0;for(let i=1;i<=n;i++){const d=c[i]-c[i-1];d>=0?g+=d:l-=d}g/=n;l/=n;o[n]=l===0?100:100-100/(1+g/l);for(let i=n+1;i<c.length;i++){const d=c[i]-c[i-1];g=(g*(n-1)+Math.max(d,0))/n;l=(l*(n-1)+Math.max(-d,0))/n;o[i]=l===0?100:100-100/(1+g/l)}return o}
+function adx(d,n=14){if(d.length<n*3)return null;const tr=trSeries(d),pd=[0],md=[0];
+  for(let i=1;i<d.length;i++){const u=d[i].high-d[i-1].high,w=d[i-1].low-d[i].low;pd.push(u>w&&u>0?u:0);md.push(w>u&&w>0?w:0)}
+  const a=wilder(tr,n),p=wilder(pd,n),m=wilder(md,n),dx=[];
+  for(let i=n;i<d.length;i++){const pi=100*p[i]/a[i],mi=100*m[i]/a[i];dx.push(pi+mi?100*Math.abs(pi-mi)/(pi+mi):0)}
+  let v=dx.slice(0,n).reduce((x,y)=>x+y,0)/n;for(let i=n;i<dx.length;i++)v=(v*(n-1)+dx[i])/n;
+  const k=d.length-1;return{adx:v,pdi:100*p[k]/a[k],mdi:100*m[k]/a[k]}}
+function squeeze(d){const c=d.map(x=>x.close);if(c.length<140)return null;const bw=[];
+  for(let i=19;i<c.length;i++){const w=c.slice(i-19,i+1),m=w.reduce((p,q)=>p+q,0)/20,s=Math.sqrt(w.reduce((p,q)=>p+(q-m)**2,0)/20);bw.push(4*s/m*100)}
+  const h=bw.slice(-120),cu=h[h.length-1];return{bw:cu,pc:h.filter(x=>x<=cu).length/h.length*100}}
+function structure(d){const p=pivots(d.slice(-150),3),H=p.H.slice(-2),L=p.L.slice(-2);if(H.length<2||L.length<2)return null;
+  const hh=H[1]>H[0],hl=L[1]>L[0],last=d[d.length-1].close;
+  return{t:hh&&hl?'up':!hh&&!hl?'dn':'wa',bos:last>H[1]?'up':last<L[1]?'dn':null,hi:H[1],lo:L[1]}}
+function divergence(d){const c=d.map(x=>x.close),r=rsiSeries(c),k=3,o=Math.max(k,d.length-90),H=[],L=[];
+  for(let i=o;i<d.length-k;i++){let h=1,l=1;for(let j=1;j<=k;j++){if(d[i].high<=d[i-j].high||d[i].high<=d[i+j].high)h=0;if(d[i].low>=d[i-j].low||d[i].low>=d[i+j].low)l=0}if(r[i]!=null){if(h)H.push(i);if(l)L.push(i)}}
+  let res=null;const n=d.length-1;
+  if(L.length>=2){const a=L[L.length-2],b=L[L.length-1];if(d[b].low<d[a].low&&r[b]>r[a]+2)res={t:'bull',age:n-b}}
+  if(H.length>=2){const a=H[H.length-2],b=H[H.length-1];if(d[b].high>d[a].high&&r[b]<r[a]-2&&(!res||n-b<res.age))res={t:'bear',age:n-b}}
+  return res}
+function volReg(d){const a=wilder(trSeries(d)),p=[];for(let i=0;i<a.length;i++)if(a[i]!=null)p.push(a[i]/d[i].close*100);
+  if(p.length<60)return null;const h=p.slice(-250),cu=h[h.length-1];return{atrp:cu,pc:h.filter(x=>x<=cu).length/h.length*100}}
+function ewma(daily,crypto){const c=daily.map(x=>x.close),r=[];for(let i=1;i<c.length;i++)r.push(Math.log(c[i]/c[i-1]));if(r.length<30)return null;
+  let v=r.slice(0,20).reduce((p,q)=>p+q*q,0)/20;for(const x of r.slice(20))v=.94*v+.06*x*x;return Math.sqrt(v*(crypto?365:252))}
+function mulberry(a){return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function bootCone(hi,crypto){if(!hi||hi.length<300)return null;const c=hi.map(x=>x.close).slice(-1500),r=[];
+  for(let i=1;i<c.length;i++)r.push(Math.log(c[i]/c[i-1]));
+  const mu=r.reduce((p,q)=>p+q,0)/r.length,z=r.map(x=>x-mu),n=z.length,B=5,rnd=mulberry(42),N=1500;
+  const Hs=crypto?[['1 Mon',30],['6 Mon',182],['1 Jahr',365],['2 Jahre',730]]:[['1 Mon',21],['6 Mon',126],['1 Jahr',252],['2 Jahre',504]];
+  return Hs.map(([l,h])=>{const s=new Float64Array(N);
+    for(let k=0;k<N;k++){let t=0,m=0;while(m<h){const st=Math.floor(rnd()*(n-B));for(let j=0;j<B&&m<h;j++,m++)t+=z[st+j]}s[k]=t}
+    const a=Array.from(s).sort((p,q)=>p-q),q=p=>a[Math.floor(p*(N-1))];return{l,p5:q(.05),p16:q(.16),p84:q(.84),p95:q(.95)}})}
+function setupBt(d,crypto,sc){const n=d.length;if(n<400||!sc||d[0].high==null)return null;
+  const a=wilder(trSeries(d)),cost=crypto?.002:.001,MH=crypto?30:20,T={L:[],S:[]},nx={L:0,S:0};
+  for(let i=200;i<n-1;i++){const q=sc[i];if(q==null||a[i]==null)continue;const side=q>=3?'L':q<=-3?'S':null;if(!side||i<nx[side])continue;
+    const e=d[i].close,R=2*a[i],sg=side==='L'?1:-1,stop=e-sg*R,tg=e+sg*3*a[i];let ex=null,j=i+1;
+    for(;j<=Math.min(n-1,i+MH);j++){const lo=d[j].low,hh=d[j].high;
+      if(side==='L'?lo<=stop:hh>=stop){ex=stop;break}
+      if(side==='L'?hh>=tg:lo<=tg){ex=tg;break}}
+    if(ex==null){if(i+MH>n-1)continue;j=i+MH;ex=d[j].close}
+    T[side].push({i,r:(sg*(ex-e)-cost*e)/R});nx[side]=j+1}
+  const sm=t=>{if(t.length<8)return{n:t.length};const rs=t.map(x=>x.r),avg=rs.reduce((p,q)=>p+q,0)/rs.length;let eq=0,pk=0,dd=0,ls=0,ml=0;
+    rs.forEach(x=>{eq+=x;pk=Math.max(pk,eq);dd=Math.min(dd,eq-pk);ls=x<=0?ls+1:0;ml=Math.max(ml,ls)});
+    return{n:rs.length,hit:rs.filter(x=>x>0).length/rs.length*100,avg,dd,ml}};
+  const sp=Math.floor(n*.6),f=s=>({all:sm(T[s]),is:sm(T[s].filter(x=>x.i<sp)),oos:sm(T[s].filter(x=>x.i>=sp))});
+  return{cost:cost*100,mh:MH,L:f('L'),S:f('S')}}
+function factorTest(d,crypto,sc){if(!sc||!sc.cp||d.length<400)return null;const H=crypto?30:20,n=d.length,N={t:'Trend (EMA)',m:'MACD',r:'RSI (konträr)',x:'EMA-Kreuz'};
+  return Object.keys(N).map(k=>{const P=[],M=[];for(let i=200;i<n-H;i++){const v=sc.cp[k][i],r=d[i+H].close/d[i].close-1;if(v>0)P.push(r);else if(v<0)M.push(r)}
+    const av=a=>a.length>=10?a.reduce((p,q)=>p+q,0)/a.length*100:null,p=av(P),m=av(M);
+    return{l:N[k],h:H,p,m,np:P.length,nm:M.length,diff:p!=null&&m!=null?p-m:null}})}
+function btExtraHtml(sb,ft){if(!sb&&!ft)return'';
+  const F=x=>x.hit==null?(x.n+' Trades (zu wenige)'):`${x.n} Trades · Treffer ${fmt(x.hit,0)} % · Ø <b class="${x.avg>=0?'up':'dn'}">${x.avg>=0?'+':''}${fmt(x.avg,2)} R</b> · Max-Drawdown ${fmt(x.dd,1)} R · bis zu ${x.ml} Verluste in Folge`;
+  let h='<details style="margin-top:8px;font-size:.78rem"><summary><b>Setup-Backtest &amp; Faktorprüfung</b><button class="i" data-info="sbt">?</button></summary>';
+  if(sb)h+=[['L','Long bei Signal „konstruktiv“'],['S','Short bei Signal „vorsichtig“ (nur per Derivate)']].map(([k,l])=>`<div style="margin-top:6px"><b>${l}</b><br>Gesamt: ${F(sb[k].all)}<br>Erste 60 %: ${F(sb[k].is)}<br>Letzte 40 % (ungesehen): ${F(sb[k].oos)}</div>`).join('')+`<div class="mu" style="margin-top:4px">Stop 2 ATR, Ziel 3 ATR, max. ${sb.mh} Tage Haltedauer, Kosten ${fmt(sb.cost,2)} % je Trade, keine überlappenden Trades. 1 R = Abstand Entry–Stop.</div>`;
+  if(ft)h+=`<div style="margin-top:10px"><b>Welche Faktoren tragen wirklich?</b></div><table style="margin-top:4px"><tr><th>Faktor</th><th>bullisch Ø</th><th>bärisch Ø</th><th>Differenz</th></tr>`+ft.map(x=>`<tr><td>${x.l}</td><td>${x.p==null?'–':fmt(x.p,1)+' %'}<br><span class="mu">n=${x.np}</span></td><td>${x.m==null?'–':fmt(x.m,1)+' %'}<br><span class="mu">n=${x.nm}</span></td><td class="${x.diff>0.3?'up':'dn'}">${x.diff==null?'–':fmt(x.diff,1)+' %'}<br>${x.diff>0.3?'Vorteil':'kein Vorteil'}</td></tr>`).join('')+`</table><div class="mu" style="margin-top:4px">Ø Rendite nach ${ft[0].h} Handelstagen, getrennt nach Richtung des Faktors. „kein Vorteil“ = Differenz unter 0,3 Prozentpunkten.</div>`;
+  return h+'</details>'}
 function volProfile(d,B=48){
   if(!d||d.length<5)return null;
   const lo=Math.min(...d.map(x=>x.low)),hi=Math.max(...d.map(x=>x.high)),st=(hi-lo)/B;if(!(st>0))return null;
@@ -630,8 +698,18 @@ async function render(){
     const vpAll=volProfile(d.slice(-250));
     const vzS=vpAll?vpAll.nodes.filter(n=>n.p<an.last).map(n=>n.p).sort((x,y)=>y-x):[],vzR=vpAll?vpAll.nodes.filter(n=>n.p>an.last).map(n=>n.p).sort((x,y)=>x-y):[];
     const ayx=r.ay&&!r.ay.err?{tm:r.ay.tm!=null?r.ay.tm*f:null,up:r.ay.tm!=null?(r.ay.tm*f/an.last-1)*100:null,n:r.ay.n,rm:r.ay.rm,rkl:RK[r.ay.rk]||'',days:r.ay.ed?Math.round((r.ay.ed-Date.now()/1000)/86400):null}:null;
+    const adxv=adx(d),sq=squeeze(d),stc=structure(d),dv=divergence(d),vr=volReg(d),ew=r.daily&&r.daily.length>60?ewma(r.daily,a.crypto):null,bc=bootCone(r.hi,a.crypto);
+    const hs=r.hi?btSeries(r.hi):null,sb=hs?setupBt(r.hi,a.crypto,hs):null,ft=hs?factorTest(r.hi,a.crypto,hs):null;
+    const TR=(l,i,v)=>v?`<dt>${l}<button class="i" data-info="${i}">?</button></dt><dd>${v}</dd>`:'';
+    const techRows=
+      TR('Trendstärke (ADX)','adx',adxv&&`${fmt(adxv.adx,0)} <span class="${adxv.adx>=25?'up':'wa'}">(${adxv.adx>=25?'Trend':adxv.adx<20?'kein Trend / Seitwärts':'Übergang'})</span><br>+DI ${fmt(adxv.pdi,0)} · −DI ${fmt(adxv.mdi,0)}`)+
+      TR('Bollinger-Squeeze','sq',sq&&`Bandbreite ${fmt(sq.bw,1)} % (Perzentil ${fmt(sq.pc,0)})<br><span class="${sq.pc<=15?'wa':'mu'}">${sq.pc<=15?'Verengung: Ausbruch möglich, Richtung offen':sq.pc>=85?'Bänder weit, Beruhigung wahrscheinlich':'normal'}</span>`)+
+      TR('Marktstruktur','struct',stc&&`<span class="${stc.t}">${stc.t==='up'?'Höhere Hochs und Tiefs':stc.t==='dn'?'Tiefere Hochs und Tiefs':'gemischt'}</span>${stc.bos?`<br><span class="${stc.bos==='up'?'up':'dn'}">Strukturbruch ${stc.bos==='up'?'nach oben (über '+s+fmt(stc.hi)+')':'nach unten (unter '+s+fmt(stc.lo)+')'}</span>`:''}`)+
+      TR('RSI-Divergenz','div',dv&&`<span class="${dv.t==='bull'?'up':'dn'}">${dv.t==='bull'?'bullisch':'bärisch'}</span> (vor ${dv.age} Kerzen)`)+
+      TR('Volatilitäts-Regime','vreg',vr&&`ATR ${fmt(vr.atrp,2)} % · Perzentil ${fmt(vr.pc,0)}<br><span class="mu">${vr.pc>=80?'hohe Volatilität':vr.pc<=20?'ruhiger Markt':'normal'}</span>${ew&&vol?`<br>EWMA-Vola ${fmt(ew*100,0)} % vs. Ø ${fmt(vol.ann*100,0)} % p. a.`:''}`);
+    const bootRow=bc?`<dt>Spanne Bootstrap<button class="i" data-info="boot">?</button></dt><dd>${bc.map(x=>`${x.l}: ${s}${fmt(an.last*Math.exp(x.p16))} – ${s}${fmt(an.last*Math.exp(x.p84))}<br><span class="mu">90 %: ${s}${fmt(an.last*Math.exp(x.p5))} – ${s}${fmt(an.last*Math.exp(x.p95))}</span>`).join('<br>')}</dd>`:'';
     const vd=verdict(an,st,vol,s,r.fa,r.nw,{mtf,rs:rsx,bt,ax,dr:r.dr,ay:ayx,vz:{sup:vzS.length?vzS[0]:null,res:vzR.length?vzR[0]:null}});
-    AIC[a.symbol]={asset:a.name,symbol:a.symbol,typ:a.crypto?'Krypto':'Aktie/ETF',zeitrahmen:tf,waehrung:cur,kurs:an.last,aenderung_pct:+an.chg.toFixed(2),trend:an.regime,ema_kreuz:an.cross,rsi:an.rsi?+an.rsi.toFixed(1):null,macd_hist_positiv:an.hist>=0,atr_pct:+(an.atr/an.last*100).toFixed(2),support:an.sup,resistance:an.res,fibonacci:an.fib.map(x=>+x.v.toFixed(4)),setup:{richtung:st.dir,entry:st.entry,stop:st.stop,ziel:st.target,crv:st.crv},vola_jahr_pct:vol?+(vol.ann*100).toFixed(0):null,trend_tag_vs_woche:mtf?[mtf.d.cls,mtf.w.cls]:null,rel_staerke:rsx?{vs:rsx.name,r6:rsx.r6,stark:rsx.strong}:null,fundamental:r.fa||null,analysten:ayx||null,derivate:r.dr||null,schlagzeilen:(r.nw||[]).map(x=>x.t),szenario_korridore:[2026,2027].map(y=>{if(!vol)return null;const t=Math.max(0,(new Date(y,11,31)-Date.now())/31557600000),sd=vol.ann*Math.sqrt(t),f=k=>[+(an.last*Math.exp(-k*sd)).toFixed(2),+(an.last*Math.exp(k*sd)).toFixed(2)];return{ende:y,restlaufzeit_jahre:+t.toFixed(2),neutral_ohne_trend_68pct:f(1),neutral_ohne_trend_95pct:f(2)}}).filter(Boolean),regelbasiertes_urteil:vd.lab,regelbasierte_begruendung:vd.html.replace(/<[^>]+>/g,'')};
+    AIC[a.symbol]={asset:a.name,symbol:a.symbol,typ:a.crypto?'Krypto':'Aktie/ETF',zeitrahmen:tf,waehrung:cur,kurs:an.last,aenderung_pct:+an.chg.toFixed(2),trend:an.regime,ema_kreuz:an.cross,rsi:an.rsi?+an.rsi.toFixed(1):null,macd_hist_positiv:an.hist>=0,atr_pct:+(an.atr/an.last*100).toFixed(2),support:an.sup,resistance:an.res,fibonacci:an.fib.map(x=>+x.v.toFixed(4)),setup:{richtung:st.dir,entry:st.entry,stop:st.stop,ziel:st.target,crv:st.crv},vola_jahr_pct:vol?+(vol.ann*100).toFixed(0):null,trend_tag_vs_woche:mtf?[mtf.d.cls,mtf.w.cls]:null,rel_staerke:rsx?{vs:rsx.name,r6:rsx.r6,stark:rsx.strong}:null,fundamental:r.fa||null,analysten:ayx||null,derivate:r.dr||null,schlagzeilen:(r.nw||[]).map(x=>x.t),szenario_korridore:[2026,2027].map(y=>{if(!vol)return null;const t=Math.max(0,(new Date(y,11,31)-Date.now())/31557600000),sd=vol.ann*Math.sqrt(t),f=k=>[+(an.last*Math.exp(-k*sd)).toFixed(2),+(an.last*Math.exp(k*sd)).toFixed(2)];return{ende:y,restlaufzeit_jahre:+t.toFixed(2),neutral_ohne_trend_68pct:f(1),neutral_ohne_trend_95pct:f(2)}}).filter(Boolean),technik_zusatz:{adx:adxv?+adxv.adx.toFixed(0):null,struktur:stc?stc.t:null,strukturbruch:stc?stc.bos:null,divergenz:dv?dv.t:null,squeeze_perzentil:sq?+sq.pc.toFixed(0):null,vola_perzentil:vr?+vr.pc.toFixed(0):null},setup_backtest_ungesehen:sb?{long:sb.L.oos,short:sb.S.oos}:null,regelbasiertes_urteil:vd.lab,regelbasierte_begruendung:vd.html.replace(/<[^>]+>/g,'')};
     const LB={up:'Aufwärtstrend',dn:'Abwärtstrend',wa:'Übergangsphase'};
     const mtfRow=mtf?`<dt>Mehrzeitebenen<button class="i" data-info="mtf">?</button></dt><dd>Tag ${dd.arrow} · Woche ${ww.arrow}<br><span class="${dd.cls===ww.cls&&dd.cls!=='wa'?dd.cls:'wa'}">${dd.cls===ww.cls?(dd.cls==='wa'?'beide ohne Richtung':'übereinstimmend'):'widersprüchlich'}</span></dd>`:'';
     const rsRow=rsx?`<dt>Rel. Stärke vs ${esc(rsx.name)}<button class="i" data-info="rs">?</button></dt><dd>${[['3 Mon',rsx.r3],['6 Mon',rsx.r6],['1 J',rsx.r12]].filter(x=>x[1]!=null).map(([l,v])=>`${l} <span class="${v>=0?'up':'dn'}">${v>=0?'+':''}${fmt(v,1)} %</span>`).join(' · ')}<br><span class="${rsx.strong?'up':'dn'}">${rsx.strong?'Trend: stärker':'Trend: schwächer'}</span></dd>`:'';
@@ -713,8 +791,8 @@ async function render(){
       <dt>ATR (14)<button class="i" data-info="atr">?</button></dt><dd>${s}${fmt(an.atr)} (${fmt(an.atr/an.last*100,2)} %)</dd>
       <dt>Support / Resistance<button class="i" data-info="sr">?</button></dt><dd>${an.sup?s+fmt(an.sup):'–'} / ${an.res?s+fmt(an.res):'–'}</dd>
       <dt>Fibonacci (Szenario)<button class="i" data-info="fib">?</button></dt><dd>${an.fib.map(x=>s+fmt(x.v)).join(' · ')}</dd>
-      <dt>Spanne 1σ<button class="i" data-info="scen">?</button></dt><dd>${scen}</dd>${mtfRow}${rsRow}${volRow}${vpRow}${seaRow}${drRows}${fundRows}${ayRows}
-    </dl>${newsHtml}${ayHtml}${btHtml}${axHtml}
+      <dt>Spanne 1σ<button class="i" data-info="scen">?</button></dt><dd>${scen}</dd>${bootRow}${techRows}${mtfRow}${rsRow}${volRow}${vpRow}${seaRow}${drRows}${fundRows}${ayRows}
+    </dl>${newsHtml}${ayHtml}${btHtml}${btExtraHtml(sb,ft)}${axHtml}
     <div class="setup"><b>Trade-Setup (${st.dir})</b><button class="i" data-info="crv">?</button> <span class="mu">${st.auto?'automatisch: Stop 2 ATR, Ziel nächste Resistance':'manuell'}</span>
       <div class="in" data-sym="${esc(a.symbol)}" data-f="${f}">
         <div><label>Entry</label><input type="number" step="any" data-k="entry" value="${+st.entry.toPrecision(7)}"></div>
