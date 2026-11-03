@@ -104,7 +104,7 @@ table{border-collapse:collapse;font-size:.75rem;width:100%}td,th{padding:4px 6px
   <div class="row" style="justify-content:flex-end"><button class="pri" data-close>Verstanden</button></div></div></div>
 
 <script type="text/plain" id="wk-src">
-// Cloudflare Worker v4: CORS-Proxy für Yahoo Finance (/chart, /search, /fund, /summary) + KI (/ai)
+// Cloudflare Worker v5 (neu: /onchain): CORS-Proxy für Yahoo Finance (/chart, /search, /fund, /summary) + KI (/ai)
 // KI gratis: im Worker unter Settings → Bindings ein 'Workers AI'-Binding mit dem Namen AI anlegen. Optional statt dessen Claude: Secret ANTHROPIC_KEY. Optional: Variable ALLOWED_ORIGIN (z. B. https://DEINNAME.github.io).
 const UA = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36' };
 const MODS = 'financialData,recommendationTrend,calendarEvents,earningsTrend,defaultKeyStatistics,upgradeDowngradeHistory,netSharePurchaseActivity';
@@ -155,7 +155,7 @@ export default {
     }
     let target;
     if (u.pathname === '/') {
-      return new Response('{"ok":true,"version":4,"ai":' + (env && (env.ANTHROPIC_KEY || env.AI) ? 'true' : 'false') + '}', { headers: cors });
+      return new Response('{"ok":true,"version":5,"ai":' + (env && (env.ANTHROPIC_KEY || env.AI) ? 'true' : 'false') + '}', { headers: cors });
     } else if (u.pathname === '/chart') {
       const i = u.searchParams.get('interval') || '1d';
       const r = u.searchParams.get('range') || '1y';
@@ -171,6 +171,10 @@ export default {
       const p1 = u.searchParams.get('p1') || '', p2 = u.searchParams.get('p2') || '';
       if (!okSym || !/^[A-Za-z,]{1,400}$/.test(t) || !/^\d{9,10}$/.test(p1) || !/^\d{9,10}$/.test(p2)) return err(400, 'bad request');
       target = `https://query2.finance.yahoo.com/ws/fundamentals-timeseries/v1/finance/timeseries/${encodeURIComponent(sym)}?type=${t}&period1=${p1}&period2=${p2}`;
+    } else if (u.pathname === '/onchain') {
+      const m = u.searchParams.get('m') || '', sd = u.searchParams.get('startday') || '';
+      if (!/^[a-z0-9_-]{3,40}$/.test(m) || (sd && !/^\d{4}-\d{2}-\d{2}$/.test(sd))) return err(400, 'bad request');
+      target = `https://bitcoin-data.com/v1/${m}${sd ? '?startday=' + sd : '/last'}`;
     } else if (u.pathname === '/summary') {
       if (!okSym) return err(400, 'bad request');
       try {
@@ -245,6 +249,7 @@ const INFO={
  ddnow:['Aktuell vom Hoch','Abstand des aktuellen Kurses zum bisherigen Höchststand der Historie, in Prozent.'],
  sharpe:['Sharpe / Sortino','Rendite im Verhältnis zum Risiko. Sharpe nutzt alle Schwankungen, Sortino nur die Abwärtsschwankungen. Über 1 gilt als gut, unter 0,5 als schwach.'],
  var:['VaR 95 % / CVaR','Value at Risk: Tagesverlust, der an 95 % der Tage nicht überschritten wurde. CVaR ist der Durchschnitt der schlechtesten 5 % der Tage und zeigt, wie schlimm die schlechten Tage im Mittel waren.'],
+ onchain:['On-Chain: kurzfristige Halter (STH)','STH = Bitcoin-Käufer, deren Coins jünger als 155 Tage sind. Sie reagieren am stärksten auf Kursschwankungen. Der Einstandskurs ist der Durchschnittspreis, zu dem diese Coins zuletzt bewegt wurden. STH-MVRV = Kurs geteilt durch diesen Einstandskurs: unter 1 sind die Käufer im Verlust, über 1 im Gewinn. Faustwerte: unter 0,8 oft Ausverkauf und Bodenzone, 0,8 bis 1 Verlust und Verkaufsdruck, 1 bis 1,3 gesund, darüber überhitzt. STH-SOPR = Verkaufspreis geteilt durch Kaufpreis: unter 1 wird mit Verlust verkauft, über 1 mit Gewinn. Gezeigt wird der Schnitt der letzten 7 Tage. Im Urteil zählt der MVRV bis ±1 Punkt (unter 0,8 und 1 bis 1,3 positiv, 0,8 bis 1 und über 1,3 negativ) und der SOPR ±1 Punkt. Die Zonen sind Faustwerte aus der Vergangenheit, keine Garantie. Quelle: BGeometrics (kostenlos, nur 15 Abrufe pro Tag, deshalb werden die Werte 12 Stunden zwischengespeichert).'],
  adx:['ADX (Trendstärke)','Misst, wie stark ein Trend ist, nicht in welche Richtung. Über 25 = Trend, unter 20 = Seitwärtsmarkt. +DI über −DI spricht für Aufwärtsdruck. In Seitwärtsphasen sind EMA-Signale unzuverlässig.'],
  sq:['Bollinger-Squeeze','Bandbreite der Bollinger-Bänder (20 Kerzen, 2σ) im Vergleich zu den letzten 120 Kerzen. Sehr niedriges Perzentil = Verengung, oft folgt eine größere Bewegung, aber die Richtung ist offen.'],
  struct:['Marktstruktur','Vergleicht die letzten zwei Pivot-Hochs und -Tiefs. Höhere Hochs und Tiefs = Aufwärtsstruktur, tiefere = Abwärtsstruktur. Ein Strukturbruch liegt vor, wenn der Kurs das letzte Pivot-Hoch überschreitet oder das letzte Pivot-Tief unterschreitet; gegen die bisherige Struktur ist das ein frühes Warnsignal für eine Trendwende.'],
@@ -410,13 +415,15 @@ function verdict(an,st,vol,s,fa,nw,ex){
   const rsc=rl&&rl.r6!=null?(rl.strong&&rl.r6>0?1:!rl.strong&&rl.r6<0?-1:0):0;
   const dfs=ex.dr&&ex.dr.fund!=null?(ex.dr.fund>0.03?-1:ex.dr.fund<-0.01?1:0):0;
   const A=ex.ay,ays=A?(A.tm!=null?(A.up>15?1:A.up<-5?-1:0):0)+(A.rm!=null?(A.rm<=2.2?1:A.rm>=3.5?-1:0):0):0;
+  const oc=ex.oc&&ex.oc.mvrv!=null&&Date.now()-ex.oc.t<2592e5?ex.oc:null;
+  const ocA=oc?(oc.mvrv<.8?1:oc.mvrv<1?-1:oc.mvrv<=1.3?1:-1):0,ocB=oc?(oc.sopr7>=1.005?1:oc.sopr7<=.995?-1:0):0;
   const T=ex.tx||{},ad=T.adx,stc=T.stc,dv=T.dv,lean=Math.sign(sc);
   const adS=ad?(ad.adx<20?(an.enough?-(an.cls==='up'?1:an.cls==='dn'?-1:0):0):ad.adx>=25?(ad.pdi>ad.mdi?1:-1):0):0;
   const stS=stc?(stc.bos&&stc.t!=='wa'&&stc.bos!==stc.t?0:stc.t==='up'?1:stc.t==='dn'?-1:0):0;
   const dvS=dv&&dv.age<=20?(dv.t==='bull'?1:-1):0;
   const ed=T.sb?(lean>0?T.sb.L.oos:lean<0?T.sb.S.oos:null):null;
   const vS=ed&&ed.n>=8?lean*(ed.avg>0.1?1:ed.avg<-0.1?-1:0):0;
-  const tot=sc+P('Fundamentaldaten',fs||0)+P('Nachrichten',sn?sn.s:0)+P('Mehrzeitebenen',ms)+P('Relative Stärke',rsc)+P('Funding',dfs)+P('Analysten & Termine',ays)+P('Trendstärke (ADX)',adS)+P('Marktstruktur',stS)+P('RSI-Divergenz',dvS)+P('Setup-Backtest (ungesehen)',vS);
+  const tot=sc+P('Fundamentaldaten',fs||0)+P('Nachrichten',sn?sn.s:0)+P('Mehrzeitebenen',ms)+P('Relative Stärke',rsc)+P('Funding',dfs)+P('Analysten & Termine',ays)+P('Trendstärke (ADX)',adS)+P('Marktstruktur',stS)+P('RSI-Divergenz',dvS)+P('Setup-Backtest (ungesehen)',vS)+P('On-Chain: Einstandskurs kurzfr. Halter',ocA)+P('On-Chain: SOPR',ocB);
   const lab=tot>=4?'konstruktiv':tot<=-4?'vorsichtig':'neutral',cls=tot>=4?'up':tot<=-4?'dn':'wa';
   const n=an.e200.length,d200=an.enough?(an.last/an.e200[n-1]-1)*100:null;
   const rsiL=an.rsi>70?'überkauft':an.rsi<30?'überverkauft':'neutral';
@@ -463,8 +470,9 @@ function verdict(an,st,vol,s,fa,nw,ex){
   let t11='';{const k=lean<0?'S':'L',o=T.sb&&T.sb[k];
     if(o&&o.all.hit!=null)t11=`Das ${k==='L'?'Long':'Short'}-Setup (Stop 2 ATR, Ziel 3 ATR, nach Kosten) erzielte historisch Ø ${fmt(o.all.avg,2)} R bei ${o.all.n} Trades`+(o.oos.hit!=null?`, in den letzten 40 % der Historie Ø ${fmt(o.oos.avg,2)} R (${o.oos.avg>0.1?'Vorteil bestätigt':o.oos.avg<-0.1?'kein Vorteil in ungesehenen Daten':'neutral'})`:'')+'.';
     if(T.ft){const bad=T.ft.filter(x=>x.diff!=null&&x.diff<=0.3).map(x=>x.l);if(bad.length)t11+=(t11?' ':'')+`Historisch ohne Vorteil: ${bad.join(', ')}.`}}
+  let t12='';if(oc)t12=`On-Chain (Käufer der letzten ca. 155 Tage): Der STH-MVRV von ${fmt(oc.mvrv,2)} heißt, dass sie im Schnitt ${fmt(Math.abs(oc.mvrv-1)*100,0)} % ${oc.mvrv<1?'im Verlust':'im Gewinn'} liegen (${ocZone(oc.mvrv)[1]}); der SOPR liegt im 7-Tage-Schnitt bei ${fmt(oc.sopr7,3)} (${oc.sopr7>=1.005?'es wird mit Gewinn verkauft':oc.sopr7<=.995?'es wird mit Verlust verkauft':'ausgeglichen'}).`;
   const t5=`Gesamteinschätzung: <b class="${cls}">${lab}</b> (regelbasiert, keine Anlageberatung).`;
-  return{lab,cls,br:BR,tot,html:[t1,t2,t3,t10,t4,t6,t11,t7,t8,t9,t5].filter(Boolean).join(' ')};
+  return{lab,cls,br:BR,tot,html:[t1,t2,t3,t10,t4,t6,t11,t12,t7,t8,t9,t5].filter(Boolean).join(' ')};
 }
 /* ---------- Charts ---------- */
 function destroyCharts(){charts.forEach(c=>{try{c.ro.disconnect();c.ch.remove()}catch(e){}});charts=[]}
@@ -685,6 +693,39 @@ async function deriv(a){
   const t=v(tk);if(t){const t7=t.slice(-7);o.tk=t7.reduce((q,x)=>q+ +x.buySellRatio,0)/t7.length}
   const d=Object.keys(o).length?o:null;cache.set(k,{t:Date.now(),d});return d;
 }
+/* ---------- On-Chain BTC (BGeometrics, kostenlos: 10 Abrufe/Std., 15/Tag) ---------- */
+const OCK='qt7_onch';
+async function ocGet(m,sd){
+  const q=sd?'?startday='+sd:'/last',direct='https://bitcoin-data.com/v1/'+m+q,viaW=`${cfg.proxy}/onchain?m=${E(m)}${sd?'&startday='+sd:''}`;
+  let rt=LS.get(OCK+'_r','d'),err;
+  if(rt==='d'){try{return await getJSON(direct)}catch(e){err=e;if(/Rate-Limit/.test(e.message))throw e;LS.set(OCK+'_r','p')}}
+  try{return await yget(viaW,direct)}catch(e){throw err&&!cfg.proxy?new Error('Direktzugriff blockiert, '+e.message):e}
+}
+function ocRows(j){const arr=Array.isArray(j)?j:(j&&Array.isArray(j.data)?j.data:j?[j]:[]),SK=/^(d|day|date|time|timestamp|unixts|ts|theday|id)$/i;
+  const o=arr.map(x=>{if(Array.isArray(x))return{t:+x[0],v:+x[1]};if(x&&typeof x==='object'){let t=null,v=null;for(const k of Object.keys(x)){const y=x[k];if(SK.test(k)){t=typeof y==='number'?y:Date.parse(y)||null}else if(v==null&&y!=null&&y!==''&&isFinite(+y))v=+y}return{t,v}}return{t:null,v:+x}}).filter(x=>x.v!=null&&isFinite(x.v));
+  return o.every(x=>x.t!=null)?o.sort((a,b)=>a.t-b.t):o}
+async function onchain(){
+  const c=LS.get(OCK,null),now=Date.now(),old=c&&c.d&&now-c.t<2592e5;
+  if(c&&c.d&&now-c.t<432e5)return{...c.d,t:c.t};
+  const fl=LS.get(OCK+'_f',null);
+  if(fl&&now-fl.t<36e5)return old?{...c.d,t:c.t,stale:1,err:fl.m}:{err:fl.m};
+  const day=n=>new Date(now-n*864e5).toISOString().slice(0,10);
+  try{
+    const [m,s,p]=await Promise.all([ocGet('sth-mvrv',day(30)),ocGet('sth-sopr',day(14)),ocGet('sth-realized-price')]);
+    const M=ocRows(m),S=ocRows(s),R=ocRows(p);
+    if(!M.length||!S.length||!R.length)throw new Error('unerwartetes Datenformat');
+    const L=a=>a[a.length-1].v,d={mvrv:L(M),mvrv7:M.length>7?M[M.length-8].v:null,mvrv30:M[0].v,sopr:L(S),sopr7:S.slice(-7).reduce((q,x)=>q+x.v,0)/Math.min(7,S.length),rp:L(R)};
+    if(!(d.mvrv>.2&&d.mvrv<5&&d.sopr7>.5&&d.sopr7<2&&d.rp>1000))throw new Error('Werte nicht plausibel');
+    LS.set(OCK,{t:now,d});LS.set(OCK+'_f',null);return{...d,t:now}
+  }catch(e){LS.set(OCK+'_f',{t:now,m:e.message});return old?{...c.d,t:c.t,stale:1,err:e.message}:{err:e.message}}
+}
+function ocZone(v){return v<.8?['up','Ausverkauf: historisch oft eine Bodenzone, verlässlich erst mit Stabilisierung']:v<1?['wa','im Verlust: Verkaufsdruck, der Einstandskurs wirkt oft als Widerstand']:v<=1.3?['up','im Gewinn: der Einstandskurs dient oft als Unterstützung']:['dn','stark im Gewinn: erhöhtes Risiko für Gewinnmitnahmen']}
+function ocHtml(o,f,s){
+  if(!o)return '';
+  const row=v=>`<dt>On-Chain (kurzfristige Halter)<button class="i" data-info="onchain">?</button></dt><dd>${v}</dd>`;
+  if(o.mvrv==null)return row(`<span class="mu">nicht verfügbar (${esc(o.err||'?')})${cfg.proxy?'<br>Falls der Worker die Route /onchain nicht kennt: Worker-Code unter ⚙ neu kopieren.':'<br>Zuverlässiger mit eigenem Worker (⚙).'}</span>`);
+  const z=ocZone(o.mvrv),age=Math.round((Date.now()-o.t)/36e5),dm=o.mvrv7!=null?o.mvrv-o.mvrv7:null,so=o.sopr7;
+  return row(`STH-MVRV <b class="${z[0]}">${fmt(o.mvrv,2)}</b> (${fmt((o.mvrv-1)*100,0)} % zum Einstandskurs)${dm!=null?', 7 T '+(dm>=0?'+':'')+fmt(dm,2):''}<br><span class="${z[0]}">${z[1]}</span><br>SOPR Ø 7 T <b class="${so>=1.005?'up':so<=.995?'dn':'wa'}">${fmt(so,3)}</b> (${so>=1.005?'Gewinnmitnahmen':so<=.995?'Verlustverkäufe':'ausgeglichen'})<br>Einstandskurs ${s}${fmt(o.rp*f)}<br><span class="mu">Quelle BGeometrics, Stand vor ${age} h${o.stale?' (Aktualisierung fehlgeschlagen)':''}</span>`)}
 const RK={strong_buy:'Stark kaufen',buy:'Kaufen',hold:'Halten',underperform:'Untergewichten',sell:'Verkaufen'};
 async function analyst(a){
   const k='A|'+a.symbol,c=cache.get(k);if(c&&Date.now()-c.t<(c.d.err?3e5:216e5))return c.d;
@@ -708,10 +749,10 @@ async function analyst(a){
 const soft=(p,ms=8000)=>Promise.race([p,new Promise(r=>setTimeout(()=>r(null),ms))]);
 async function load(a){
   const ex=[(!a.crypto&&a.src==='yahoo')?fundamentals(a).catch(()=>null):Promise.resolve(null),(a.crypto||a.src==='yahoo')?news(a).catch(()=>null):Promise.resolve(null)];
-  const ayP=(!a.crypto&&a.src==='yahoo'&&cfg.proxy)?analyst(a):null,drP=a.crypto?deriv(a).catch(()=>null):null,B=benchOf(a),wkP=tf==='1w'?null:candles(a,'1w').catch(()=>null),bnP=B?candles(B,'1d').catch(()=>null):null,hiP=history(a).catch(()=>null);
+  const ayP=(!a.crypto&&a.src==='yahoo'&&cfg.proxy)?analyst(a):null,drP=a.crypto?deriv(a).catch(()=>null):null,ocP=a.symbol==='BTCUSDT'?onchain():null,B=benchOf(a),wkP=tf==='1w'?null:candles(a,'1w').catch(()=>null),bnP=B?candles(B,'1d').catch(()=>null):null,hiP=history(a).catch(()=>null);
   try{const d=await candles(a,tf);let daily=d;if(tf!=='1d')try{daily=await candles(a,'1d')}catch(e){daily=null}
-    const [fa,nw,wk,bn,hi,dr,ay]=await Promise.all([...ex,wkP,bnP,hiP,drP,ayP].map(p=>soft(p)));
-    return{a,d,daily,fa,nw,wk:tf==='1w'?d:wk,bn,hi,dr,ay,B}}catch(e){return{a,err:e.message}}
+    const [fa,nw,wk,bn,hi,dr,ay,oc]=await Promise.all([...ex,wkP,bnP,hiP,drP,ayP,ocP].map(p=>soft(p)));
+    return{a,d,daily,fa,nw,wk:tf==='1w'?d:wk,bn,hi,dr,ay,oc,B}}catch(e){return{a,err:e.message}}
 }
 async function render(){
   const my=++token;busy=true;
@@ -747,9 +788,11 @@ async function render(){
       TR('Marktstruktur','struct',stc&&`<span class="${stc.t}">${stc.t==='up'?'Höhere Hochs und Tiefs':stc.t==='dn'?'Tiefere Hochs und Tiefs':'gemischt'}</span>${stc.bos?`<br><span class="${stc.bos==='up'?'up':'dn'}">Strukturbruch ${stc.bos==='up'?'nach oben (über '+s+fmt(stc.hi)+')':'nach unten (unter '+s+fmt(stc.lo)+')'}</span>`:''}`)+
       TR('RSI-Divergenz','div',dv&&`<span class="${dv.t==='bull'?'up':'dn'}">${dv.t==='bull'?'bullisch':'bärisch'}</span> (vor ${dv.age} Kerzen)`)+
       TR('Volatilitäts-Regime','vreg',vr&&`ATR ${fmt(vr.atrp,2)} % · Perzentil ${fmt(vr.pc,0)}<br><span class="mu">${vr.pc>=80?'hohe Volatilität':vr.pc<=20?'ruhiger Markt':'normal'}</span>${ew&&vol?`<br>EWMA-Vola ${fmt(ew*100,0)} % vs. Ø ${fmt(vol.ann*100,0)} % p. a.`:''}`);
+    const ocRow=a.symbol==='BTCUSDT'?ocHtml(r.oc,f,s):'';
     const bootRow=bc?`<dt>Spanne Bootstrap<button class="i" data-info="boot">?</button></dt><dd>${bc.map(x=>`${x.l}: ${s}${fmt(an.last*Math.exp(x.p16))} – ${s}${fmt(an.last*Math.exp(x.p84))}<br><span class="mu">90 %: ${s}${fmt(an.last*Math.exp(x.p5))} – ${s}${fmt(an.last*Math.exp(x.p95))}</span>`).join('<br>')}</dd>`:'';
-    const vd=verdict(an,st,vol,s,r.fa,r.nw,{mtf,rs:rsx,bt,ax,dr:r.dr,ay:ayx,tx:{adx:adxv,stc,dv,sq,vr,sb,ft,bc},vz:{sup:vzS.length?vzS[0]:null,res:vzR.length?vzR[0]:null}});
-    AIC[a.symbol]={asset:a.name,symbol:a.symbol,typ:a.crypto?'Krypto':'Aktie/ETF',zeitrahmen:tf,waehrung:cur,kurs:an.last,aenderung_pct:+an.chg.toFixed(2),trend:an.regime,ema_kreuz:an.cross,rsi:an.rsi?+an.rsi.toFixed(1):null,macd_hist_positiv:an.hist>=0,atr_pct:+(an.atr/an.last*100).toFixed(2),support:an.sup,resistance:an.res,fibonacci:an.fib.map(x=>+x.v.toFixed(4)),setup:{richtung:st.dir,entry:st.entry,stop:st.stop,ziel:st.target,crv:st.crv},vola_jahr_pct:vol?+(vol.ann*100).toFixed(0):null,trend_tag_vs_woche:mtf?[mtf.d.cls,mtf.w.cls]:null,rel_staerke:rsx?{vs:rsx.name,r6:rsx.r6,stark:rsx.strong}:null,fundamental:r.fa||null,analysten:ayx||null,derivate:r.dr||null,schlagzeilen:(r.nw||[]).map(x=>x.t),szenario_korridore:[2026,2027].map(y=>{if(!vol)return null;const t=Math.max(0,(new Date(y,11,31)-Date.now())/31557600000),sd=vol.ann*Math.sqrt(t),f=k=>[+(an.last*Math.exp(-k*sd)).toFixed(2),+(an.last*Math.exp(k*sd)).toFixed(2)];return{ende:y,restlaufzeit_jahre:+t.toFixed(2),neutral_ohne_trend_68pct:f(1),neutral_ohne_trend_95pct:f(2)}}).filter(Boolean),urteil_punkte:Object.fromEntries(vd.br.filter(x=>x[1]!==0)),urteil_summe:vd.tot,
+    const vd=verdict(an,st,vol,s,r.fa,r.nw,{mtf,rs:rsx,bt,ax,dr:r.dr,ay:ayx,oc:r.oc,tx:{adx:adxv,stc,dv,sq,vr,sb,ft,bc},vz:{sup:vzS.length?vzS[0]:null,res:vzR.length?vzR[0]:null}});
+    AIC[a.symbol]={asset:a.name,symbol:a.symbol,typ:a.crypto?'Krypto':'Aktie/ETF',zeitrahmen:tf,waehrung:cur,kurs:an.last,aenderung_pct:+an.chg.toFixed(2),trend:an.regime,ema_kreuz:an.cross,rsi:an.rsi?+an.rsi.toFixed(1):null,macd_hist_positiv:an.hist>=0,atr_pct:+(an.atr/an.last*100).toFixed(2),support:an.sup,resistance:an.res,fibonacci:an.fib.map(x=>+x.v.toFixed(4)),setup:{richtung:st.dir,entry:st.entry,stop:st.stop,ziel:st.target,crv:st.crv},vola_jahr_pct:vol?+(vol.ann*100).toFixed(0):null,trend_tag_vs_woche:mtf?[mtf.d.cls,mtf.w.cls]:null,rel_staerke:rsx?{vs:rsx.name,r6:rsx.r6,stark:rsx.strong}:null,fundamental:r.fa||null,analysten:ayx||null,derivate:r.dr||null,schlagzeilen:(r.nw||[]).map(x=>x.t),szenario_korridore:[2026,2027].map(y=>{if(!vol)return null;const t=Math.max(0,(new Date(y,11,31)-Date.now())/31557600000),sd=vol.ann*Math.sqrt(t),f=k=>[+(an.last*Math.exp(-k*sd)).toFixed(2),+(an.last*Math.exp(k*sd)).toFixed(2)];return{ende:y,restlaufzeit_jahre:+t.toFixed(2),neutral_ohne_trend_68pct:f(1),neutral_ohne_trend_95pct:f(2)}}).filter(Boolean),onchain_btc:r.oc&&r.oc.mvrv!=null?{sth_mvrv:rd(r.oc.mvrv,2),sth_mvrv_vor_7_tagen:rd(r.oc.mvrv7,2),sth_mvrv_vor_30_tagen:rd(r.oc.mvrv30,2),sth_sopr_7t_schnitt:rd(r.oc.sopr7,3),sth_einstandskurs:rd(r.oc.rp*f),stand_vor_h:Math.round((Date.now()-r.oc.t)/36e5),hinweis:'STH = Coins jünger als 155 Tage; MVRV unter 1 = Käufer im Verlust; SOPR unter 1 = Verlustverkäufe'}:null,
+      urteil_punkte:Object.fromEntries(vd.br.filter(x=>x[1]!==0)),urteil_summe:vd.tot,
       technik_zusatz:{adx:adxv?{adx:rd(adxv.adx,0),plus_di:rd(adxv.pdi,0),minus_di:rd(adxv.mdi,0)}:null,marktstruktur:stc?{trend:stc.t,strukturbruch:stc.bos}:null,rsi_divergenz:dv||null,squeeze_bandbreite_perzentil:sq?rd(sq.pc,0):null,atr_perzentil:vr?rd(vr.pc,0):null,ewma_vola_pct:ew?rd(ew*100,0):null},
       bootstrap_korridore_68pct:bc?bc.map(x=>({horizont:x.l,von:rd(an.last*Math.exp(x.p16)),bis:rd(an.last*Math.exp(x.p84))})):null,
       setup_backtest:sb?{kosten_pct:sb.cost,max_haltedauer_tage:sb.mh,long:sb.L,short:sb.S,hinweis:'R = Risiko bis Stop; oos = letzte 40 % der Historie, ungesehen'}:null,
@@ -842,7 +885,7 @@ async function render(){
       <dt>ATR (14)<button class="i" data-info="atr">?</button></dt><dd>${s}${fmt(an.atr)} (${fmt(an.atr/an.last*100,2)} %)</dd>
       <dt>Support / Resistance<button class="i" data-info="sr">?</button></dt><dd>${an.sup?s+fmt(an.sup):'–'} / ${an.res?s+fmt(an.res):'–'}</dd>
       <dt>Fibonacci (Szenario)<button class="i" data-info="fib">?</button></dt><dd>${an.fib.map(x=>s+fmt(x.v)).join(' · ')}</dd>
-      <dt>Spanne 1σ<button class="i" data-info="scen">?</button></dt><dd>${scen}</dd>${bootRow}${techRows}${mtfRow}${rsRow}${volRow}${vpRow}${seaRow}${drRows}${fundRows}${ayRows}
+      <dt>Spanne 1σ<button class="i" data-info="scen">?</button></dt><dd>${scen}</dd>${ocRow}${bootRow}${techRows}${mtfRow}${rsRow}${volRow}${vpRow}${seaRow}${drRows}${fundRows}${ayRows}
     </dl>${newsHtml}${ayHtml}${btHtml}${btExtraHtml(sb,ft)}${axHtml}
     <div class="setup"><b>Trade-Setup (${st.dir})</b><button class="i" data-info="crv">?</button> <span class="mu">${st.auto?'automatisch: Stop 2 ATR, Ziel nächste Resistance':'manuell'}</span>
       <div class="in" data-sym="${esc(a.symbol)}" data-f="${f}">
@@ -854,7 +897,7 @@ async function render(){
       ${st.size&&st.size*st.entry>cfg.capital?'<br><span class="wa">Positionswert übersteigt Kapital (Hebel nötig)</span>':''}
       ${an.rsi&&an.cls==='dn'&&st.dir==='Long'?'<br><span class="wa">Long gegen den Abwärtstrend</span>':''}
       <button data-act="reset" data-sym="${esc(a.symbol)}" style="margin-top:6px">Auto-Werte</button></div></div>
-    <div class="mu" style="margin-top:8px">Stand: ${hhmm(Date.now())} · Letzte Kerze vor ${age} h · Quelle: ${srcName(a)} · ${tf.toUpperCase()}<br>Zusatzdaten: ${[...(a.crypto?[['Derivate',r.dr]]:[['Fundamental',r.fa]]),...(!a.crypto&&cfg.proxy&&a.src==='yahoo'?[['Analysten',r.ay&&!r.ay.err]]:[]),['News',r.nw&&r.nw.length],['Wochentrend',mtf],['Benchmark',rsx],['Backtest',bt],['Risiko/Verteilung',ax]].map(([l,v])=>`<span class="${v?'up':'dn'}">${v?'✓':'✗'}</span> ${l}`).join(' · ')}</div>`;
+    <div class="mu" style="margin-top:8px">Stand: ${hhmm(Date.now())} · Letzte Kerze vor ${age} h · Quelle: ${srcName(a)} · ${tf.toUpperCase()}<br>Zusatzdaten: ${[...(a.crypto?[['Derivate',r.dr]]:[['Fundamental',r.fa]]),...(!a.crypto&&cfg.proxy&&a.src==='yahoo'?[['Analysten',r.ay&&!r.ay.err]]:[]),...(a.symbol==='BTCUSDT'?[['On-Chain',r.oc&&r.oc.mvrv!=null]]:[]),['News',r.nw&&r.nw.length],['Wochentrend',mtf],['Benchmark',rsx],['Backtest',bt],['Risiko/Verteilung',ax]].map(([l,v])=>`<span class="${v?'up':'dn'}">${v?'✓':'✗'}</span> ${l}`).join(' · ')}</div>`;
     card.querySelectorAll('dt').forEach(t=>{const k=LBK[t.textContent.trim()];if(k&&!t.querySelector('.i'))t.insertAdjacentHTML('beforeend',`<button class="i" data-info="${k}">?</button>`)});
     $('#grid').insertBefore(card,$('#macro'));
     mkChart(card.querySelector('.ch'),d,an,st);
@@ -918,8 +961,8 @@ async function loadMacro(){
 /* ---------- KI ---------- */
 let AIFREE=!!LS.get('qt7_aifree',0);
 const AIC={},AIO={},aiKey=y=>'qt7_ai_'+y+'_'+tf+'_'+cur+(AIFREE?'_f':''),aiData=y=>{const c={...AIC[y]};if(!AIFREE)delete c.szenario_korridore;return c};
-const AIS=`Du bist ein nüchterner Research-Analyst für ein Multi-Asset-Dashboard. Du bekommst fertig berechnete Marktdaten als JSON. Rechne nichts neu und erfinde keine Zahlen, Kurse oder Ereignisse; nutze nur die gelieferten Werte. Trenne Fakt, Signal und Szenario. Berücksichtige ALLE gelieferten Felder, besonders urteil_punkte (Zerlegung des regelbasierten Urteils), technik_zusatz, setup_backtest (die ungesehene Periode oos ist maßgeblich), faktorpruefung_diff_pct, bootstrap_korridore_68pct, risiko, historische_verteilung, saisonalitaet, volumenprofil, derivate, analysten und fundamental. Gewichte historisch bewährte Signale höher und benenne Signale, die sich in der Validierung nicht bewährt haben. Suche gezielt nach Widersprüchen zwischen den Signalen (z. B. Tages- vs. Wochentrend, Trend vs. Fundamentaldaten, Funding/Positionierung vs. Preis). Bewerte die Schlagzeilen nach Relevanz, nicht nach Stichworten. Keine Anlageberatung, keine Kauf-/Verkaufsempfehlung; benenne Unsicherheit offen. Antworte NUR mit JSON ohne Markdown: {"einordnung":"max. 4 Sätze","widersprueche":["..."],"ungueltig_wenn":["konkrete Preis- oder Datenbedingung, bei der das Setup hinfällig wäre"],"nachrichten":{"stimmung":"positiv|neutral|negativ|gemischt|keine","begruendung":"1-2 Sätze"},"konfidenz":"niedrig|mittel|hoch"}`;
-const AIS_FREE=`Du bist ein erfahrener Research-Analyst für ein Multi-Asset-Dashboard. FREIER MODUS: Du bekommst fertig berechnete Marktdaten als JSON, darfst aber darüber hinaus denken, dein allgemeines Marktwissen einbeziehen und Prognosen wagen. Gib für Ende 2026 und Ende 2027 je ein bullisches, ein neutrales und ein bärisches Szenario mit Kurskorridor und grober Eintrittswahrscheinlichkeit in Prozent (Summe 100) sowie eine Tendenz an. Nutze szenario_korridore, Analystenziel, Trend, Support und Resistance als Anker. Kennzeichne klar, was aus den Daten stammt und was deine eigene Einschätzung oder Annahme ist. Erfinde keine konkreten Ereignisse, Termine oder Kennzahlen. Berücksichtige ALLE gelieferten Felder, besonders urteil_punkte (Zerlegung des regelbasierten Urteils), technik_zusatz, setup_backtest (die ungesehene Periode oos ist maßgeblich), faktorpruefung_diff_pct, bootstrap_korridore_68pct, risiko, historische_verteilung, saisonalitaet, volumenprofil, derivate, analysten und fundamental. Gewichte historisch bewährte Signale höher und benenne Signale, die sich in der Validierung nicht bewährt haben. Suche gezielt nach Widersprüchen zwischen den Signalen (z. B. Tages- vs. Wochentrend, Trend vs. Fundamentaldaten, Funding/Positionierung vs. Preis). Bewerte die Schlagzeilen nach Relevanz, nicht nach Stichworten. Keine Anlageberatung; Prognosen sind spekulativ. Antworte NUR mit JSON ohne Markdown: {"einordnung":"max. 4 Sätze","widersprueche":["..."],"ungueltig_wenn":["..."],"nachrichten":{"stimmung":"positiv|neutral|negativ|gemischt|keine","begruendung":"1-2 Sätze"},"ausblick":{"ende_2026":"Szenarien mit Kurskorridor und Wahrscheinlichkeit, 2-3 Sätze","ende_2027":"Szenarien mit Kurskorridor und Wahrscheinlichkeit, 2-3 Sätze"},"konfidenz":"niedrig|mittel|hoch"}`;
+const AIS=`Du bist ein nüchterner Research-Analyst für ein Multi-Asset-Dashboard. Du bekommst fertig berechnete Marktdaten als JSON. Rechne nichts neu und erfinde keine Zahlen, Kurse oder Ereignisse; nutze nur die gelieferten Werte. Trenne Fakt, Signal und Szenario. Berücksichtige ALLE gelieferten Felder, besonders urteil_punkte (Zerlegung des regelbasierten Urteils), technik_zusatz, setup_backtest (die ungesehene Periode oos ist maßgeblich), faktorpruefung_diff_pct, bootstrap_korridore_68pct, onchain_btc, risiko, historische_verteilung, saisonalitaet, volumenprofil, derivate, analysten und fundamental. Gewichte historisch bewährte Signale höher und benenne Signale, die sich in der Validierung nicht bewährt haben. Suche gezielt nach Widersprüchen zwischen den Signalen (z. B. Tages- vs. Wochentrend, Trend vs. Fundamentaldaten, Funding/Positionierung vs. Preis). Bewerte die Schlagzeilen nach Relevanz, nicht nach Stichworten. Keine Anlageberatung, keine Kauf-/Verkaufsempfehlung; benenne Unsicherheit offen. Das kurzfazit ist für Laien gedacht: einfache Sprache, keine Abkürzungen (kein EMA, RSI, ATR, MACD), sagt klar ob die Lage eher bullisch oder bärisch ist und warum, passt zur Gesamtlage und zum regelbasierten Urteil (Abweichung kurz begründen), keine Kauf-/Verkaufsempfehlung. Antworte NUR mit JSON ohne Markdown: {"kurzfazit":{"tendenz":"bullisch|eher bullisch|neutral|eher bärisch|bärisch","satz":"Kernaussage, max. 20 Wörter","laien":"1-2 Sätze ohne Fachbegriffe"},"einordnung":"max. 4 Sätze","widersprueche":["..."],"ungueltig_wenn":["konkrete Preis- oder Datenbedingung, bei der das Setup hinfällig wäre"],"nachrichten":{"stimmung":"positiv|neutral|negativ|gemischt|keine","begruendung":"1-2 Sätze"},"konfidenz":"niedrig|mittel|hoch"}`;
+const AIS_FREE=`Du bist ein erfahrener Research-Analyst für ein Multi-Asset-Dashboard. FREIER MODUS: Du bekommst fertig berechnete Marktdaten als JSON, darfst aber darüber hinaus denken, dein allgemeines Marktwissen einbeziehen und Prognosen wagen. Gib für Ende 2026 und Ende 2027 je ein bullisches, ein neutrales und ein bärisches Szenario mit Kurskorridor und grober Eintrittswahrscheinlichkeit in Prozent (Summe 100) sowie eine Tendenz an. Nutze szenario_korridore, Analystenziel, Trend, Support und Resistance als Anker. Kennzeichne klar, was aus den Daten stammt und was deine eigene Einschätzung oder Annahme ist. Erfinde keine konkreten Ereignisse, Termine oder Kennzahlen. Berücksichtige ALLE gelieferten Felder, besonders urteil_punkte (Zerlegung des regelbasierten Urteils), technik_zusatz, setup_backtest (die ungesehene Periode oos ist maßgeblich), faktorpruefung_diff_pct, bootstrap_korridore_68pct, onchain_btc, risiko, historische_verteilung, saisonalitaet, volumenprofil, derivate, analysten und fundamental. Gewichte historisch bewährte Signale höher und benenne Signale, die sich in der Validierung nicht bewährt haben. Suche gezielt nach Widersprüchen zwischen den Signalen (z. B. Tages- vs. Wochentrend, Trend vs. Fundamentaldaten, Funding/Positionierung vs. Preis). Bewerte die Schlagzeilen nach Relevanz, nicht nach Stichworten. Keine Anlageberatung; Prognosen sind spekulativ. Das kurzfazit ist für Laien gedacht: einfache Sprache, keine Abkürzungen (kein EMA, RSI, ATR, MACD), sagt klar ob die Lage eher bullisch oder bärisch ist und warum, passt zur Gesamtlage und zum regelbasierten Urteil (Abweichung kurz begründen), keine Kauf-/Verkaufsempfehlung. Antworte NUR mit JSON ohne Markdown: {"kurzfazit":{"tendenz":"bullisch|eher bullisch|neutral|eher bärisch|bärisch","satz":"Kernaussage, max. 20 Wörter","laien":"1-2 Sätze ohne Fachbegriffe"},"einordnung":"max. 4 Sätze","widersprueche":["..."],"ungueltig_wenn":["..."],"nachrichten":{"stimmung":"positiv|neutral|negativ|gemischt|keine","begruendung":"1-2 Sätze"},"ausblick":{"ende_2026":"Szenarien mit Kurskorridor und Wahrscheinlichkeit, 2-3 Sätze","ende_2027":"Szenarien mit Kurskorridor und Wahrscheinlichkeit, 2-3 Sätze"},"konfidenz":"niedrig|mittel|hoch"}`;
 const AIQ='Beantworte die Frage zum Asset auf Deutsch, knapp (max. 5 Sätze), nur auf Basis der gelieferten Daten. Gibt die Datenlage es nicht her, sag das. Keine Anlageberatung.';
 const AIQ_FREE='FREIER MODUS: Beantworte die Frage zum Asset auf Deutsch (max. 8 Sätze). Du darfst über die gelieferten Daten hinaus denken und Prognosen wagen. Bei Fragen zur Entwicklung bis zu einem Datum gib Szenarien (bullisch, neutral, bärisch) mit Kurskorridoren und grober Wahrscheinlichkeit, gestützt auf szenario_korridore, Analystenziel, Trend, Support und Resistance. Trenne Daten von eigener Einschätzung, nenne es spekulativ, erfinde keine Ereignisse oder Kennzahlen. Keine Anlageberatung.';
 const AIM='Fasse die Marktumfeld-Daten auf Deutsch in 3 bis 4 Sätzen zusammen: Risk-on oder Risk-off, was treibt das Bild, was ist auffällig. Nur gelieferte Werte nutzen, keine Prognosen, keine Anlageberatung. Reiner Text.';
@@ -933,7 +976,9 @@ async function aiCall(system,messages){
 const aiLi=(t,l)=>{l=Array.isArray(l)?l:l?[l]:[];return l.length?`<h4>${t}</h4><ul>${l.map(x=>`<li>${esc(typeof x==='string'?x:JSON.stringify(x))}</li>`).join('')}</ul>`:''};
 function aiShow(box,o,t){
   if(!box)return;if(o.nachrichten&&typeof o.nachrichten==='string')o.nachrichten={stimmung:'',begruendung:o.nachrichten};const y=box.dataset.sym;AIO[y]=o;box.style.display='';
-  box.innerHTML=`<b>KI-Einordnung</b> <span class="mu">Konfidenz: ${esc(o.konfidenz||'–')}${o._f?' · Freier Modus':''}${t?' · Stand '+hhmm(t):''}</span><p>${esc(o.einordnung||'')}</p>`+aiLi('Widersprüche',o.widersprueche)+aiLi('Ungültig, wenn',o.ungueltig_wenn)+(o.ausblick&&typeof o.ausblick==='object'?`<h4>Ausblick (Szenarien, spekulativ)</h4><div>${esc(o.ausblick.ende_2026||'')}</div><div style="margin-top:4px">${esc(o.ausblick.ende_2027||'')}</div>`:'')+(o.nachrichten&&o.nachrichten.begruendung&&o.nachrichten.stimmung!=='keine'?`<h4>Nachrichten${o.nachrichten.stimmung?': '+esc(o.nachrichten.stimmung):''}</h4><div>${esc(o.nachrichten.begruendung||'')}</div>`:'')+`<div class="row" style="margin-top:8px;flex-wrap:nowrap"><input class="ai-q" placeholder="Frage zu diesem Asset …"><button data-act="aiq" data-sym="${esc(y)}">Fragen</button></div><div class="ai-a" style="margin-top:6px"></div><div class="mu" style="margin-top:6px">${o._f?'Freier Modus: spekulative KI-Einschätzung mit eigenen Annahmen, keine verlässliche Prognose, kein Anlagerat.':'Strenger Modus: nur auf Basis der berechneten Werte, kein Anlagerat, kann sich irren.'} Die regelbasierte Bewertung oben bleibt unverändert.</div>`;
+  const kf=o.kurzfazit&&typeof o.kurzfazit==='object'?o.kurzfazit:null,tk=String(kf&&kf.tendenz||'').toLowerCase(),kc=/bär|baer|bear/.test(tk)?'dn':/bull/.test(tk)?'up':'wa';
+  const kfHtml=kf&&(kf.satz||kf.tendenz)?`<div style="margin:6px 0;padding:8px;border-radius:8px;background:var(--inf)"><span class="tag ${kc}">${kc==='up'?'▲':kc==='dn'?'▼':'▬'} ${esc(kf.tendenz||'')}</span> <b>${esc(kf.satz||'')}</b>${kf.laien?`<div class="mu" style="margin-top:4px">${esc(kf.laien)}</div>`:''}</div>`:'';
+  box.innerHTML=`<b>KI-Einordnung</b> <span class="mu">Konfidenz: ${esc(o.konfidenz||'–')}${o._f?' · Freier Modus':''}${t?' · Stand '+hhmm(t):''}</span>${kfHtml}<p>${esc(o.einordnung||'')}</p>`+aiLi('Widersprüche',o.widersprueche)+aiLi('Ungültig, wenn',o.ungueltig_wenn)+(o.ausblick&&typeof o.ausblick==='object'?`<h4>Ausblick (Szenarien, spekulativ)</h4><div>${esc(o.ausblick.ende_2026||'')}</div><div style="margin-top:4px">${esc(o.ausblick.ende_2027||'')}</div>`:'')+(o.nachrichten&&o.nachrichten.begruendung&&o.nachrichten.stimmung!=='keine'?`<h4>Nachrichten${o.nachrichten.stimmung?': '+esc(o.nachrichten.stimmung):''}</h4><div>${esc(o.nachrichten.begruendung||'')}</div>`:'')+`<div class="row" style="margin-top:8px;flex-wrap:nowrap"><input class="ai-q" placeholder="Frage zu diesem Asset …"><button data-act="aiq" data-sym="${esc(y)}">Fragen</button></div><div class="ai-a" style="margin-top:6px"></div><div class="mu" style="margin-top:6px">${o._f?'Freier Modus: spekulative KI-Einschätzung mit eigenen Annahmen, keine verlässliche Prognose, kein Anlagerat.':'Strenger Modus: nur auf Basis der berechneten Werte, kein Anlagerat, kann sich irren.'} Die regelbasierte Bewertung oben bleibt unverändert.</div>`;
 }
 async function aiAsset(y){
   const box=document.querySelector(`.ai[data-sym="${CSS.escape(y)}"]`),c=AIC[y];if(!box||!c)return;
