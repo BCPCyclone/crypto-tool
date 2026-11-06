@@ -104,7 +104,7 @@ table{border-collapse:collapse;font-size:.75rem;width:100%}td,th{padding:4px 6px
   <div class="row" style="justify-content:flex-end"><button class="pri" data-close>Verstanden</button></div></div></div>
 
 <script type="text/plain" id="wk-src">
-// Cloudflare Worker v5 (neu: /onchain): CORS-Proxy für Yahoo Finance (/chart, /search, /fund, /summary) + KI (/ai)
+// Cloudflare Worker v4: CORS-Proxy für Yahoo Finance (/chart, /search, /fund, /summary) + KI (/ai)
 // KI gratis: im Worker unter Settings → Bindings ein 'Workers AI'-Binding mit dem Namen AI anlegen. Optional statt dessen Claude: Secret ANTHROPIC_KEY. Optional: Variable ALLOWED_ORIGIN (z. B. https://DEINNAME.github.io).
 const UA = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36' };
 const MODS = 'financialData,recommendationTrend,calendarEvents,earningsTrend,defaultKeyStatistics,upgradeDowngradeHistory,netSharePurchaseActivity';
@@ -155,7 +155,7 @@ export default {
     }
     let target;
     if (u.pathname === '/') {
-      return new Response('{"ok":true,"version":5,"ai":' + (env && (env.ANTHROPIC_KEY || env.AI) ? 'true' : 'false') + '}', { headers: cors });
+      return new Response('{"ok":true,"version":4,"ai":' + (env && (env.ANTHROPIC_KEY || env.AI) ? 'true' : 'false') + '}', { headers: cors });
     } else if (u.pathname === '/chart') {
       const i = u.searchParams.get('interval') || '1d';
       const r = u.searchParams.get('range') || '1y';
@@ -171,10 +171,6 @@ export default {
       const p1 = u.searchParams.get('p1') || '', p2 = u.searchParams.get('p2') || '';
       if (!okSym || !/^[A-Za-z,]{1,400}$/.test(t) || !/^\d{9,10}$/.test(p1) || !/^\d{9,10}$/.test(p2)) return err(400, 'bad request');
       target = `https://query2.finance.yahoo.com/ws/fundamentals-timeseries/v1/finance/timeseries/${encodeURIComponent(sym)}?type=${t}&period1=${p1}&period2=${p2}`;
-    } else if (u.pathname === '/onchain') {
-      const m = u.searchParams.get('m') || '', sd = u.searchParams.get('startday') || '';
-      if (!/^[a-z0-9_-]{3,40}$/.test(m) || (sd && !/^\d{4}-\d{2}-\d{2}$/.test(sd))) return err(400, 'bad request');
-      target = `https://bitcoin-data.com/v1/${m}${sd ? '?startday=' + sd : '/last'}`;
     } else if (u.pathname === '/summary') {
       if (!okSym) return err(400, 'bad request');
       try {
@@ -230,33 +226,6 @@ const INFO={
  rs:['Relative Stärke','Vergleich mit einer Benchmark (Krypto: Bitcoin; Bitcoin: S&P 500; deutsche Aktien: DAX; sonst S&P 500). Der Wert zeigt, wie sich das Kursverhältnis Asset/Benchmark über 3, 6 und 12 Monate verändert hat. Plus = das Asset war stärker. Der Trend vergleicht das aktuelle Verhältnis mit seinem 50-Tage-Schnitt.'],
  bt:['Backtest','Prüft rückwirkend, wie sich das Asset nach jedem früheren Tag mit demselben Technik-Score entwickelte (Trend, MACD, RSI, EMA-Kreuz). Gezeigt werden durchschnittliche Rendite und Trefferquote für die Haltedauer, verglichen mit allen Tagen. Es nutzt nur Daten bis zum jeweiligen Tag, enthält aber keine Gebühren, überlappende Zeiträume und keine Fundamentaldaten oder Nachrichten. Vergangenes Verhalten ist keine Garantie.'],
  fa:['Fundamentaldaten','KGV/KBV/KUV = Kurs im Verhältnis zu Gewinn, Buchwert und Umsatz. EV/EBITDA = Unternehmenswert zu operativem Gewinn. Umsatzwachstum und Nettomarge stammen aus den letzten Jahresberichten, Schulden/Eigenkapital zeigt die Verschuldung. Die Daten kommen inoffiziell von Yahoo und können fehlen oder verzögert sein.'],
-
- trend:['Trend-Einstufung (Aufwärtstrend / Abwärtstrend / Übergang)','Regel: Liegt der Kurs über der EMA 200 und die EMA 50 über der EMA 200, gilt Aufwärtstrend. Liegen Kurs und EMA 50 beide darunter, gilt Abwärtstrend. Alles dazwischen ist Übergang/Seitwärts. Mit weniger als 200 Kerzen ist kein Urteil möglich. Die Einstufung gilt für den oben gewählten Zeitrahmen (1H, 4H, 1T, 1W) und ist verzögert, weil sie auf Durchschnitten beruht. Sie sagt nichts über die Trendstärke aus, dafür gibt es den ADX.'],
- kgv:['KGV / KBV / KUV','Kurs-Gewinn-, Kurs-Buchwert- und Kurs-Umsatz-Verhältnis: wie viel du für 1 € Gewinn, Eigenkapital bzw. Umsatz zahlst. Niedriger heißt günstiger, aber Branchen unterscheiden sich stark. Im Urteil zählt das KGV: unter 15 positiv, über 35 negativ.'],
- evebitda:['EV/EBITDA','Unternehmenswert (Börsenwert plus Schulden minus Bargeld) geteilt durch den operativen Gewinn vor Abschreibungen. Zeigt die Bewertung unabhängig von Verschuldung und Steuern. Als Faustregel gilt unter 10 als günstig, über 20 als teuer, je nach Branche.'],
- umsatzw:['Umsatzwachstum','Veränderung des Jahresumsatzes zum Vorjahr. Positives Wachstum zeigt, dass das Geschäft wächst. Im Urteil: über 8 % positiv, unter 0 % negativ.'],
- nmarge:['Nettomarge','Anteil des Umsatzes, der als Gewinn nach Steuern übrig bleibt. Je höher, desto profitabler. Im Urteil: über 10 % positiv, negativ (Verlust) negativ.'],
- de:['Schulden / Eigenkapital','Zeigt die Verschuldung: 100 % heißt, es gibt gleich viele Schulden wie Eigenkapital. Hohe Werte machen ein Unternehmen anfälliger bei steigenden Zinsen oder schlechten Zeiten. Banken und Versicherer haben branchenbedingt hohe Werte. Im Urteil: über 200 % negativ.'],
- dy:['Dividendenrendite','Jährliche Dividende in Prozent des Kurses. Hohe Renditen können Zeichen für Stabilität sein oder dafür, dass der Kurs gefallen ist und die Dividende gekürzt werden könnte.'],
- wk52:['52-Wochen-Spanne','Abstand des Kurses zum Jahreshoch (Prozent darunter) und zum Jahrestief (Prozent darüber). Nahe am Hoch heißt starker Lauf, nahe am Tief heißt Schwäche, aber auch mögliche Chance.'],
- kz:['Kursziel der Analysten','Durchschnittliches Kursziel der Analysten für die nächsten ca. 12 Monate, mit Abstand zum aktuellen Kurs. Die Ziele liegen oft über dem Kurs und werden verspätet angepasst. Im Urteil: über 15 % Aufschlag positiv, unter −5 % negativ.'],
- empf:['Analysten-Empfehlung','Durchschnitt aller Analystenurteile von 1 (stark kaufen) bis 5 (verkaufen). Darunter die Verteilung Stark kaufen / Kaufen / Halten / Verkaufen / Stark verkaufen. Im Urteil: bis 2,2 positiv, ab 3,5 negativ.'],
- qz:['Quartalszahlen','Termin der nächsten Unternehmenszahlen. Kurz davor und danach schwankt der Kurs oft stark. Liegt der Termin innerhalb von 14 Tagen, ist das Kursrisiko erhöht.'],
- eps:['Gewinnschätzung (EPS)','Erwarteter Gewinn je Aktie laut Analysten für das Quartal, das laufende und das nächste Jahr. In Klammern die erwartete Veränderung zum Vorjahr.'],
- ins:['Insider-Aktivität','Käufe und Verkäufe von Führungskräften in den letzten 6 Monaten. Käufe sind oft ein positives Zeichen, Verkäufe haben viele harmlose Gründe, z. B. Vergütung oder Steuern.'],
- leer:['Leerverkäufer','Anteil der Aktien im Streubesitz, auf fallende Kurse gewettet wird. Hohe Werte zeigen Skepsis, können aber auch einen Short Squeeze auslösen.'],
- mdd:['Maximaler Drawdown','Größter Rückgang vom Hoch zum anschließenden Tief in der gesamten Historie. Zeigt, wie tief es im schlechten Fall schon gehen konnte.'],
- ddnow:['Aktuell vom Hoch','Abstand des aktuellen Kurses zum bisherigen Höchststand der Historie, in Prozent.'],
- sharpe:['Sharpe / Sortino','Rendite im Verhältnis zum Risiko. Sharpe nutzt alle Schwankungen, Sortino nur die Abwärtsschwankungen. Über 1 gilt als gut, unter 0,5 als schwach.'],
- var:['VaR 95 % / CVaR','Value at Risk: Tagesverlust, der an 95 % der Tage nicht überschritten wurde. CVaR ist der Durchschnitt der schlechtesten 5 % der Tage und zeigt, wie schlimm die schlechten Tage im Mittel waren.'],
- onchain:['On-Chain: kurzfristige Halter (STH)','STH = Bitcoin-Käufer, deren Coins jünger als 155 Tage sind. Sie reagieren am stärksten auf Kursschwankungen. Der Einstandskurs ist der Durchschnittspreis, zu dem diese Coins zuletzt bewegt wurden. STH-MVRV = Kurs geteilt durch diesen Einstandskurs: unter 1 sind die Käufer im Verlust, über 1 im Gewinn. Faustwerte: unter 0,8 oft Ausverkauf und Bodenzone, 0,8 bis 1 Verlust und Verkaufsdruck, 1 bis 1,3 gesund, darüber überhitzt. STH-SOPR = Verkaufspreis geteilt durch Kaufpreis: unter 1 wird mit Verlust verkauft, über 1 mit Gewinn. Gezeigt wird der Schnitt der letzten 7 Tage. Im Urteil zählt der MVRV bis ±1 Punkt (unter 0,8 und 1 bis 1,3 positiv, 0,8 bis 1 und über 1,3 negativ) und der SOPR ±1 Punkt. Die Zonen sind Faustwerte aus der Vergangenheit, keine Garantie. Quelle: BGeometrics (kostenlos, nur 15 Abrufe pro Tag, deshalb werden die Werte 12 Stunden zwischengespeichert).'],
- adx:['ADX (Trendstärke)','Misst, wie stark ein Trend ist, nicht in welche Richtung. Über 25 = Trend, unter 20 = Seitwärtsmarkt. +DI über −DI spricht für Aufwärtsdruck. In Seitwärtsphasen sind EMA-Signale unzuverlässig.'],
- sq:['Bollinger-Squeeze','Bandbreite der Bollinger-Bänder (20 Kerzen, 2σ) im Vergleich zu den letzten 120 Kerzen. Sehr niedriges Perzentil = Verengung, oft folgt eine größere Bewegung, aber die Richtung ist offen.'],
- struct:['Marktstruktur','Vergleicht die letzten zwei Pivot-Hochs und -Tiefs. Höhere Hochs und Tiefs = Aufwärtsstruktur, tiefere = Abwärtsstruktur. Ein Strukturbruch liegt vor, wenn der Kurs das letzte Pivot-Hoch überschreitet oder das letzte Pivot-Tief unterschreitet; gegen die bisherige Struktur ist das ein frühes Warnsignal für eine Trendwende.'],
- div:['RSI-Divergenz','Bullisch: Der Kurs macht ein tieferes Tief, der RSI aber ein höheres. Bärisch: höheres Hoch im Kurs, niedrigeres im RSI. Zeigt nachlassenden Schwung, ist aber kein Timing-Signal. Geprüft werden die letzten 90 Kerzen.'],
- vreg:['Volatilitäts-Regime','ATR in % des Kurses als Perzentil der letzten 250 Kerzen. EWMA-Vola gewichtet jüngste Tage stärker (Faktor 0,94) und zeigt, ob der Markt gerade unruhiger oder ruhiger ist als im Jahresschnitt. Hohe Volatilität verlangt weitere Stops und kleinere Positionen.'],
- boot:['Bootstrap-Spanne','Statt einer Normalverteilung werden echte historische Tagesrenditen in 5-Tage-Blöcken neu gemischt (1.500 Durchläufe, bis zu 6 Jahre Historie, Drift entfernt). Dadurch zeigen sich Extremereignisse („Fat Tails“) realistischer als im 1σ-Kegel. 68 % = P16 bis P84, 90 % = P5 bis P95. Das ist eine Spannweite, keine Prognose.'],
- sbt:['Setup-Backtest und Faktorprüfung','Testet das Trade-Setup historisch: Einstieg bei Signal „konstruktiv“ (Long) bzw. „vorsichtig“ (Short), Stop 2 ATR, Ziel 3 ATR, max. Haltedauer, Kosten je Trade, keine überlappenden Trades. Ergebnis in R (1 R = Risiko bis Stop). Bei gleichzeitiger Berührung von Stop und Ziel zählt der Stop. Die Regeln wurden nicht optimiert; die letzten 40 % der Historie zeigen daher, ob der Vorteil auch in ungesehenen Daten hält. Die Faktorprüfung zeigt, welche Teil-Signale des Scores historisch tatsächlich einen Renditeunterschied brachten. Vorsicht bei wenigen Trades.'],
  news:['Nachrichten und Stimmung','Aktuelle Schlagzeilen von Yahoo. Die Stimmung wird nur grob per Stichwortliste (deutsch/englisch) aus den Überschriften geschätzt und ersetzt nicht das Lesen der Meldungen.']
 };
 const DEF=[{symbol:'BTCUSDT',name:'Bitcoin',crypto:true,curr:'USD'},{symbol:'ETHUSDT',name:'Ethereum',crypto:true,curr:'USD'},{symbol:'SOLUSDT',name:'Solana',crypto:true,curr:'USD'}];
@@ -289,7 +258,7 @@ async function yget(w,y){
 }
 const E=encodeURIComponent;
 const yChart=(sy,iv,rg,ev)=>yget(`${cfg.proxy}/chart?symbol=${E(sy)}&interval=${iv}&range=${rg}${ev?'&ev=1':''}`,`https://query1.finance.yahoo.com/v8/finance/chart/${E(sy)}?interval=${iv}&range=${rg}${ev?'&events=div':''}`);
-const FT='trailingPeRatio,trailingPbRatio,trailingPsRatio,trailingEnterprisesValueEBITDARatio,annualTotalRevenue,annualNetIncome,annualTotalDebt,annualStockholdersEquity';
+const FT='trailingPeRatio,trailingPbRatio,trailingPsRatio,trailingEnterprisesValueEBITDARatio,annualTotalRevenue,annualNetIncome,annualTotalDebt,annualStockholdersEquity,annualFreeCashFlow,annualOperatingCashFlow,trailingMarketCap';
 async function fundamentals(a){
   const k='F|'+a.symbol,c=cache.get(k);if(c&&Date.now()-c.t<216e5)return c.d;
   const p2=Math.floor(Date.now()/1000),p1=p2-6*365*86400;
@@ -303,6 +272,7 @@ async function fundamentals(a){
   const rv=o.annualTotalRevenue||[],ni=o.annualNetIncome||[];
   if(rv.length>1&&rv[rv.length-2]>0)f.gr=(rv[rv.length-1]/rv[rv.length-2]-1)*100;
   if(rv.length&&ni.length&&rv[rv.length-1]>0)f.nm=ni[ni.length-1]/rv[rv.length-1]*100;
+  const fc=L('annualFreeCashFlow');f.fcf=fc;f.ocf=L('annualOperatingCashFlow');f.mc=L('trailingMarketCap');if(fc!=null&&rv.length&&rv[rv.length-1]>0)f.fcfm=fc/rv[rv.length-1]*100;
   const dt=L('annualTotalDebt'),eq=L('annualStockholdersEquity');if(dt!=null&&eq>0)f.de=dt/eq*100;
   if(ch.status==='fulfilled'){const r=ch.value.chart&&ch.value.chart.result&&ch.value.chart.result[0];
     if(r){const m=r.meta||{};f.hi=m.fiftyTwoWeekHigh||null;f.lo=m.fiftyTwoWeekLow||null;f.price=m.regularMarketPrice||null;
@@ -404,27 +374,18 @@ function fundScore(f){if(!f)return null;let s=0;
   return Math.max(-3,Math.min(3,s))}
 function verdict(an,st,vol,s,fa,nw,ex){
   ex=ex||{};
-  const BR=[],P=(l,v)=>{BR.push([l,v||0]);return v||0};
   let sc=0;
-  if(an.enough)sc+=P('Trend (EMA 50/200)',an.cls==='up'?2:an.cls==='dn'?-2:0);
-  sc+=P('MACD-Momentum',an.hist>=0?1:-1);
-  sc+=P('RSI',an.rsi>70?-1:an.rsi<30?1:0);
-  sc+=P('EMA-Kreuz',/Golden/.test(an.cross)?1:/Death/.test(an.cross)?-1:0);
+  if(an.enough)sc+=an.cls==='up'?2:an.cls==='dn'?-2:0;
+  sc+=an.hist>=0?1:-1;
+  if(an.rsi>70)sc-=1;else if(an.rsi<30)sc+=1;
+  if(/Golden/.test(an.cross))sc++;if(/Death/.test(an.cross))sc--;
   const fs=fundScore(fa),sn=sentiment(nw),m=ex.mtf,rl=ex.rs;
   const ms=m?(m.d.cls==='up'&&m.w.cls==='up'?1:m.d.cls==='dn'&&m.w.cls==='dn'?-1:0):0;
   const rsc=rl&&rl.r6!=null?(rl.strong&&rl.r6>0?1:!rl.strong&&rl.r6<0?-1:0):0;
   const dfs=ex.dr&&ex.dr.fund!=null?(ex.dr.fund>0.03?-1:ex.dr.fund<-0.01?1:0):0;
   const A=ex.ay,ays=A?(A.tm!=null?(A.up>15?1:A.up<-5?-1:0):0)+(A.rm!=null?(A.rm<=2.2?1:A.rm>=3.5?-1:0):0):0;
-  const oc=ex.oc&&ex.oc.mvrv!=null&&Date.now()-ex.oc.t<2592e5?ex.oc:null;
-  const ocA=oc?(oc.mvrv<.8?1:oc.mvrv<1?-1:oc.mvrv<=1.3?1:-1):0,ocB=oc?(oc.sopr7>=1.005?1:oc.sopr7<=.995?-1:0):0;
-  const T=ex.tx||{},ad=T.adx,stc=T.stc,dv=T.dv,lean=Math.sign(sc);
-  const adS=ad?(ad.adx<20?(an.enough?-(an.cls==='up'?1:an.cls==='dn'?-1:0):0):ad.adx>=25?(ad.pdi>ad.mdi?1:-1):0):0;
-  const stS=stc?(stc.bos&&stc.t!=='wa'&&stc.bos!==stc.t?0:stc.t==='up'?1:stc.t==='dn'?-1:0):0;
-  const dvS=dv&&dv.age<=20?(dv.t==='bull'?1:-1):0;
-  const ed=T.sb?(lean>0?T.sb.L.oos:lean<0?T.sb.S.oos:null):null;
-  const vS=ed&&ed.n>=8?lean*(ed.avg>0.1?1:ed.avg<-0.1?-1:0):0;
-  const tot=sc+P('Fundamentaldaten',fs||0)+P('Nachrichten',sn?sn.s:0)+P('Mehrzeitebenen',ms)+P('Relative Stärke',rsc)+P('Funding',dfs)+P('Analysten & Termine',ays)+P('Trendstärke (ADX)',adS)+P('Marktstruktur',stS)+P('RSI-Divergenz',dvS)+P('Setup-Backtest (ungesehen)',vS)+P('On-Chain: Einstandskurs kurzfr. Halter',ocA)+P('On-Chain: SOPR',ocB);
-  const lab=tot>=4?'konstruktiv':tot<=-4?'vorsichtig':'neutral',cls=tot>=4?'up':tot<=-4?'dn':'wa';
+  const tot=sc+(fs||0)+(sn?sn.s:0)+ms+rsc+dfs+ays;
+  const lab=tot>=3?'konstruktiv':tot<=-3?'vorsichtig':'neutral',cls=tot>=3?'up':tot<=-3?'dn':'wa';
   const n=an.e200.length,d200=an.enough?(an.last/an.e200[n-1]-1)*100:null;
   const rsiL=an.rsi>70?'überkauft':an.rsi<30?'überverkauft':'neutral';
   const LB={up:'Aufwärtstrend',dn:'Abwärtstrend',wa:'Übergangsphase'};
@@ -459,20 +420,8 @@ function verdict(an,st,vol,s,fa,nw,ex){
     if(A.tm!=null)p.push(`Analysten sehen im Mittel ein Kursziel von ${s}${fmt(A.tm)} (${A.up>=0?'+':''}${fmt(A.up,0)} % zum Kurs${A.n?', '+A.n+' Analysten':''}${A.rkl?', Konsens „'+A.rkl+'“':''})`);
     if(A.days!=null&&A.days>=0)p.push(`${p.length?'die':'Die'} nächsten Quartalszahlen stehen in ${A.days} Tagen an${A.days<=14?' und bergen kurzfristig erhöhtes Kursrisiko':''}`);
     if(p.length)t9=p.join('; ')+'.'}
-  let t10='';{const p=[];
-    if(ad)p.push(`Trendstärke ADX ${fmt(ad.adx,0)} (${ad.adx>=25?'ausgeprägter Trend':ad.adx<20?'kein belastbarer Trend, EMA-Signale sind weniger verlässlich':'Übergang'})`);
-    if(stc)p.push(`Marktstruktur: ${stc.t==='up'?'höhere Hochs und Tiefs':stc.t==='dn'?'tiefere Hochs und Tiefs':'gemischt'}${stc.bos?`, Strukturbruch nach ${stc.bos==='up'?'oben':'unten'}`:''}`);
-    if(dv)p.push(`${dv.t==='bull'?'bullische':'bärische'} RSI-Divergenz vor ${dv.age} Kerzen`);
-    if(T.sq&&T.sq.pc<=15)p.push('Bollinger-Verengung (Ausbruch möglich, Richtung offen)');
-    if(T.vr)p.push(`Volatilität im ${fmt(T.vr.pc,0)}. Perzentil${T.vr.pc>=80?' (hoch: weitere Stops, kleinere Positionen)':T.vr.pc<=20?' (ruhig)':''}`);
-    if(T.bc&&T.bc[2])p.push(`Bootstrap-Spanne 1 Jahr (68 %): ${s}${fmt(an.last*Math.exp(T.bc[2].p16))} bis ${s}${fmt(an.last*Math.exp(T.bc[2].p84))}`);
-    if(p.length)t10='Zusatzsignale: '+p.join('; ')+'.'}
-  let t11='';{const k=lean<0?'S':'L',o=T.sb&&T.sb[k];
-    if(o&&o.all.hit!=null)t11=`Das ${k==='L'?'Long':'Short'}-Setup (Stop 2 ATR, Ziel 3 ATR, nach Kosten) erzielte historisch Ø ${fmt(o.all.avg,2)} R bei ${o.all.n} Trades`+(o.oos.hit!=null?`, in den letzten 40 % der Historie Ø ${fmt(o.oos.avg,2)} R (${o.oos.avg>0.1?'Vorteil bestätigt':o.oos.avg<-0.1?'kein Vorteil in ungesehenen Daten':'neutral'})`:'')+'.';
-    if(T.ft){const bad=T.ft.filter(x=>x.diff!=null&&x.diff<=0.3).map(x=>x.l);if(bad.length)t11+=(t11?' ':'')+`Historisch ohne Vorteil: ${bad.join(', ')}.`}}
-  let t12='';if(oc)t12=`On-Chain (Käufer der letzten ca. 155 Tage): Der STH-MVRV von ${fmt(oc.mvrv,2)} heißt, dass sie im Schnitt ${fmt(Math.abs(oc.mvrv-1)*100,0)} % ${oc.mvrv<1?'im Verlust':'im Gewinn'} liegen (${ocZone(oc.mvrv)[1]}); der SOPR liegt im 7-Tage-Schnitt bei ${fmt(oc.sopr7,3)} (${oc.sopr7>=1.005?'es wird mit Gewinn verkauft':oc.sopr7<=.995?'es wird mit Verlust verkauft':'ausgeglichen'}).`;
   const t5=`Gesamteinschätzung: <b class="${cls}">${lab}</b> (regelbasiert, keine Anlageberatung).`;
-  return{lab,cls,br:BR,tot,html:[t1,t2,t3,t10,t4,t6,t11,t12,t7,t8,t9,t5].filter(Boolean).join(' ')};
+  return{lab,cls,html:[t1,t2,t3,t4,t6,t7,t8,t9,t5].filter(Boolean).join(' ')};
 }
 /* ---------- Charts ---------- */
 function destroyCharts(){charts.forEach(c=>{try{c.ro.disconnect();c.ch.remove()}catch(e){}});charts=[]}
@@ -534,12 +483,12 @@ async function history(a){
   let d;
   if(a.crypto){let end=Date.now(),all=[];
     for(let i=0;i<3;i++){const j=await getJSON(`https://api.binance.com/api/v3/klines?symbol=${a.symbol}&interval=1d&limit=1000&endTime=${end}`);if(!j.length)break;all=j.concat(all);end=j[0][0]-1;if(j.length<1000)break}
-    d=all.map(x=>({time:Math.floor(x[0]/1000),close:+x[4],high:+x[2],low:+x[3]}));
+    d=all.map(x=>({time:Math.floor(x[0]/1000),close:+x[4]}));
   }else if(a.src==='yahoo'){
     const j=await yChart(a.symbol,'1d','10y'),r=j.chart&&j.chart.result&&j.chart.result[0];
     if(!r||!r.timestamp)throw new Error('Keine Historie');
-    const q0=r.indicators.quote[0],cl=q0.close;d=[];r.timestamp.forEach((t,i)=>{if(cl[i]!=null)d.push({time:t,close:cl[i],high:(q0.high&&q0.high[i])??cl[i],low:(q0.low&&q0.low[i])??cl[i]})});
-  }else d=(await candles(a,'1d')).map(x=>({time:x.time,close:x.close,high:x.high,low:x.low}));
+    const cl=r.indicators.quote[0].close;d=[];r.timestamp.forEach((t,i)=>{if(cl[i]!=null)d.push({time:t,close:cl[i]})});
+  }else d=(await candles(a,'1d')).map(x=>({time:x.time,close:x.close}));
   d=d.filter((x,i)=>isFinite(x.close)&&(i===0||x.time>d[i-1].time));
   cache.set(k,{t:Date.now(),d});return d;
 }
@@ -555,10 +504,7 @@ function btSeries(d){
     if(rs[i]>70)q--;else if(rs[i]<30)q++;
     for(let j=i;j>i-20;j--){const x=e50[j]-e200[j],y=e50[j-1]-e200[j-1];if(x>0&&y<=0){q++;break}if(x<0&&y>=0){q--;break}}
     sc[i]=q}
-  const cp={t:[],m:[],r:[],x:[]};
-  for(let i=200;i<n;i++){const a=c[i]>e200[i],b=e50[i]>e200[i];cp.t[i]=a&&b?1:!a&&!b?-1:0;cp.m[i]=(m[i]-sg[i])>=0?1:-1;cp.r[i]=rs[i]>70?-1:rs[i]<30?1:0;let x=0;
-    for(let j=i;j>i-20;j--){const u=e50[j]-e200[j],v=e50[j-1]-e200[j-1];if(u>0&&v<=0){x=1;break}if(u<0&&v>=0){x=-1;break}}cp.x[i]=x}
-  sc.cp=cp;return sc;
+  return sc;
 }
 const sts=a=>a.length?{n:a.length,avg:a.reduce((x,y)=>x+y,0)/a.length*100,hit:a.filter(x=>x>0).length/a.length*100}:{n:0,avg:null,hit:null};
 function backtest(d,crypto){
@@ -605,67 +551,6 @@ function seasonality(d){
   return by.map(a=>a.length>=4?{avg:a.reduce((x,y)=>x+y,0)/a.length*100,hit:a.filter(x=>x>0).length/a.length*100,n:a.length}:null);
 }
 function analytics(hi,crypto,cur){return{risk:riskStats(hi,crypto),dist:fwdDist(hi,crypto,btSeries(hi),cur),season:seasonality(hi)}}
-/* ---------- Erweiterte Technik / Validierung ---------- */
-function trSeries(d){return d.map((x,i)=>i?Math.max(x.high-x.low,Math.abs(x.high-d[i-1].close),Math.abs(x.low-d[i-1].close)):x.high-x.low)}
-function wilder(a,n=14){const o=new Array(a.length).fill(null);if(a.length<=n)return o;let s=a.slice(1,n+1).reduce((p,q)=>p+q,0)/n;o[n]=s;for(let i=n+1;i<a.length;i++){s=(s*(n-1)+a[i])/n;o[i]=s}return o}
-function rsiSeries(c,n=14){const o=new Array(c.length).fill(null);if(c.length<=n)return o;let g=0,l=0;for(let i=1;i<=n;i++){const d=c[i]-c[i-1];d>=0?g+=d:l-=d}g/=n;l/=n;o[n]=l===0?100:100-100/(1+g/l);for(let i=n+1;i<c.length;i++){const d=c[i]-c[i-1];g=(g*(n-1)+Math.max(d,0))/n;l=(l*(n-1)+Math.max(-d,0))/n;o[i]=l===0?100:100-100/(1+g/l)}return o}
-function adx(d,n=14){if(d.length<n*3)return null;const tr=trSeries(d),pd=[0],md=[0];
-  for(let i=1;i<d.length;i++){const u=d[i].high-d[i-1].high,w=d[i-1].low-d[i].low;pd.push(u>w&&u>0?u:0);md.push(w>u&&w>0?w:0)}
-  const a=wilder(tr,n),p=wilder(pd,n),m=wilder(md,n),dx=[];
-  for(let i=n;i<d.length;i++){const pi=100*p[i]/a[i],mi=100*m[i]/a[i];dx.push(pi+mi?100*Math.abs(pi-mi)/(pi+mi):0)}
-  let v=dx.slice(0,n).reduce((x,y)=>x+y,0)/n;for(let i=n;i<dx.length;i++)v=(v*(n-1)+dx[i])/n;
-  const k=d.length-1;return{adx:v,pdi:100*p[k]/a[k],mdi:100*m[k]/a[k]}}
-function squeeze(d){const c=d.map(x=>x.close);if(c.length<140)return null;const bw=[];
-  for(let i=19;i<c.length;i++){const w=c.slice(i-19,i+1),m=w.reduce((p,q)=>p+q,0)/20,s=Math.sqrt(w.reduce((p,q)=>p+(q-m)**2,0)/20);bw.push(4*s/m*100)}
-  const h=bw.slice(-120),cu=h[h.length-1];return{bw:cu,pc:h.filter(x=>x<=cu).length/h.length*100}}
-function structure(d){const p=pivots(d.slice(-150),3),H=p.H.slice(-2),L=p.L.slice(-2);if(H.length<2||L.length<2)return null;
-  const hh=H[1]>H[0],hl=L[1]>L[0],last=d[d.length-1].close;
-  return{t:hh&&hl?'up':!hh&&!hl?'dn':'wa',bos:last>H[1]?'up':last<L[1]?'dn':null,hi:H[1],lo:L[1]}}
-function divergence(d){const c=d.map(x=>x.close),r=rsiSeries(c),k=3,o=Math.max(k,d.length-90),H=[],L=[];
-  for(let i=o;i<d.length-k;i++){let h=1,l=1;for(let j=1;j<=k;j++){if(d[i].high<=d[i-j].high||d[i].high<=d[i+j].high)h=0;if(d[i].low>=d[i-j].low||d[i].low>=d[i+j].low)l=0}if(r[i]!=null){if(h)H.push(i);if(l)L.push(i)}}
-  let res=null;const n=d.length-1;
-  if(L.length>=2){const a=L[L.length-2],b=L[L.length-1];if(d[b].low<d[a].low&&r[b]>r[a]+2)res={t:'bull',age:n-b}}
-  if(H.length>=2){const a=H[H.length-2],b=H[H.length-1];if(d[b].high>d[a].high&&r[b]<r[a]-2&&(!res||n-b<res.age))res={t:'bear',age:n-b}}
-  return res}
-function volReg(d){const a=wilder(trSeries(d)),p=[];for(let i=0;i<a.length;i++)if(a[i]!=null)p.push(a[i]/d[i].close*100);
-  if(p.length<60)return null;const h=p.slice(-250),cu=h[h.length-1];return{atrp:cu,pc:h.filter(x=>x<=cu).length/h.length*100}}
-function ewma(daily,crypto){const c=daily.map(x=>x.close),r=[];for(let i=1;i<c.length;i++)r.push(Math.log(c[i]/c[i-1]));if(r.length<30)return null;
-  let v=r.slice(0,20).reduce((p,q)=>p+q*q,0)/20;for(const x of r.slice(20))v=.94*v+.06*x*x;return Math.sqrt(v*(crypto?365:252))}
-function mulberry(a){return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
-function bootCone(hi,crypto){if(!hi||hi.length<300)return null;const c=hi.map(x=>x.close).slice(-1500),r=[];
-  for(let i=1;i<c.length;i++)r.push(Math.log(c[i]/c[i-1]));
-  const mu=r.reduce((p,q)=>p+q,0)/r.length,z=r.map(x=>x-mu),n=z.length,B=5,rnd=mulberry(42),N=1500;
-  const Hs=crypto?[['1 Mon',30],['6 Mon',182],['1 Jahr',365],['2 Jahre',730]]:[['1 Mon',21],['6 Mon',126],['1 Jahr',252],['2 Jahre',504]];
-  return Hs.map(([l,h])=>{const s=new Float64Array(N);
-    for(let k=0;k<N;k++){let t=0,m=0;while(m<h){const st=Math.floor(rnd()*(n-B));for(let j=0;j<B&&m<h;j++,m++)t+=z[st+j]}s[k]=t}
-    const a=Array.from(s).sort((p,q)=>p-q),q=p=>a[Math.floor(p*(N-1))];return{l,p5:q(.05),p16:q(.16),p84:q(.84),p95:q(.95)}})}
-function setupBt(d,crypto,sc){const n=d.length;if(n<400||!sc||d[0].high==null)return null;
-  const a=wilder(trSeries(d)),cost=crypto?.002:.001,MH=crypto?30:20,T={L:[],S:[]},nx={L:0,S:0};
-  for(let i=200;i<n-1;i++){const q=sc[i];if(q==null||a[i]==null)continue;const side=q>=3?'L':q<=-3?'S':null;if(!side||i<nx[side])continue;
-    const e=d[i].close,R=2*a[i],sg=side==='L'?1:-1,stop=e-sg*R,tg=e+sg*3*a[i];let ex=null,j=i+1;
-    for(;j<=Math.min(n-1,i+MH);j++){const lo=d[j].low,hh=d[j].high;
-      if(side==='L'?lo<=stop:hh>=stop){ex=stop;break}
-      if(side==='L'?hh>=tg:lo<=tg){ex=tg;break}}
-    if(ex==null){if(i+MH>n-1)continue;j=i+MH;ex=d[j].close}
-    T[side].push({i,r:(sg*(ex-e)-cost*e)/R});nx[side]=j+1}
-  const sm=t=>{if(t.length<8)return{n:t.length};const rs=t.map(x=>x.r),avg=rs.reduce((p,q)=>p+q,0)/rs.length;let eq=0,pk=0,dd=0,ls=0,ml=0;
-    rs.forEach(x=>{eq+=x;pk=Math.max(pk,eq);dd=Math.min(dd,eq-pk);ls=x<=0?ls+1:0;ml=Math.max(ml,ls)});
-    return{n:rs.length,hit:rs.filter(x=>x>0).length/rs.length*100,avg,dd,ml}};
-  const sp=Math.floor(n*.6),f=s=>({all:sm(T[s]),is:sm(T[s].filter(x=>x.i<sp)),oos:sm(T[s].filter(x=>x.i>=sp))});
-  return{cost:cost*100,mh:MH,L:f('L'),S:f('S')}}
-function factorTest(d,crypto,sc){if(!sc||!sc.cp||d.length<400)return null;const H=crypto?30:20,n=d.length,N={t:'Trend (EMA)',m:'MACD',r:'RSI (konträr)',x:'EMA-Kreuz'};
-  return Object.keys(N).map(k=>{const P=[],M=[];for(let i=200;i<n-H;i++){const v=sc.cp[k][i],r=d[i+H].close/d[i].close-1;if(v>0)P.push(r);else if(v<0)M.push(r)}
-    const av=a=>a.length>=10?a.reduce((p,q)=>p+q,0)/a.length*100:null,p=av(P),m=av(M);
-    return{l:N[k],h:H,p,m,np:P.length,nm:M.length,diff:p!=null&&m!=null?p-m:null}})}
-function btExtraHtml(sb,ft){if(!sb&&!ft)return'';
-  const F=x=>x.hit==null?(x.n+' Trades (zu wenige)'):`${x.n} Trades · Treffer ${fmt(x.hit,0)} % · Ø <b class="${x.avg>=0?'up':'dn'}">${x.avg>=0?'+':''}${fmt(x.avg,2)} R</b> · Max-Drawdown ${fmt(x.dd,1)} R · bis zu ${x.ml} Verluste in Folge`;
-  let h='<details style="margin-top:8px;font-size:.78rem"><summary><b>Setup-Backtest &amp; Faktorprüfung</b><button class="i" data-info="sbt">?</button></summary>';
-  if(sb)h+=[['L','Long bei Signal „konstruktiv“'],['S','Short bei Signal „vorsichtig“ (nur per Derivate)']].map(([k,l])=>`<div style="margin-top:6px"><b>${l}</b><br>Gesamt: ${F(sb[k].all)}<br>Erste 60 %: ${F(sb[k].is)}<br>Letzte 40 % (ungesehen): ${F(sb[k].oos)}</div>`).join('')+`<div class="mu" style="margin-top:4px">Stop 2 ATR, Ziel 3 ATR, max. ${sb.mh} Tage Haltedauer, Kosten ${fmt(sb.cost,2)} % je Trade, keine überlappenden Trades. 1 R = Abstand Entry–Stop.</div>`;
-  if(ft)h+=`<div style="margin-top:10px"><b>Welche Faktoren tragen wirklich?</b></div><table style="margin-top:4px"><tr><th>Faktor</th><th>bullisch Ø</th><th>bärisch Ø</th><th>Differenz</th></tr>`+ft.map(x=>`<tr><td>${x.l}</td><td>${x.p==null?'–':fmt(x.p,1)+' %'}<br><span class="mu">n=${x.np}</span></td><td>${x.m==null?'–':fmt(x.m,1)+' %'}<br><span class="mu">n=${x.nm}</span></td><td class="${x.diff>0.3?'up':'dn'}">${x.diff==null?'–':fmt(x.diff,1)+' %'}<br>${x.diff>0.3?'Vorteil':'kein Vorteil'}</td></tr>`).join('')+`</table><div class="mu" style="margin-top:4px">Ø Rendite nach ${ft[0].h} Handelstagen, getrennt nach Richtung des Faktors. „kein Vorteil“ = Differenz unter 0,3 Prozentpunkten.</div>`;
-  return h+'</details>'}
-const rd=(x,n=2)=>x==null||isNaN(x)?null:+x.toFixed(n);
-const RND=(k,v)=>typeof v==='number'&&isFinite(v)?+v.toPrecision(5):v;
-const LBK={'KGV / KBV / KUV':'kgv','EV/EBITDA':'evebitda','Umsatzwachstum':'umsatzw','Nettomarge':'nmarge','Schulden/Eigenkapital':'de','Dividendenrendite':'dy','52-Wochen-Spanne':'wk52','Kursziel Ø':'kz','Empfehlung':'empf','Quartalszahlen':'qz','Gewinnschätzung (EPS)':'eps','Insider (6 Mon)':'ins','Leerverkäufer':'leer','Max. Drawdown':'mdd','Aktuell vom Hoch':'ddnow','Sharpe / Sortino':'sharpe','VaR 95 % / CVaR (1 Tag)':'var'};
 function volProfile(d,B=48){
   if(!d||d.length<5)return null;
   const lo=Math.min(...d.map(x=>x.low)),hi=Math.max(...d.map(x=>x.high)),st=(hi-lo)/B;if(!(st>0))return null;
@@ -693,39 +578,6 @@ async function deriv(a){
   const t=v(tk);if(t){const t7=t.slice(-7);o.tk=t7.reduce((q,x)=>q+ +x.buySellRatio,0)/t7.length}
   const d=Object.keys(o).length?o:null;cache.set(k,{t:Date.now(),d});return d;
 }
-/* ---------- On-Chain BTC (BGeometrics, kostenlos: 10 Abrufe/Std., 15/Tag) ---------- */
-const OCK='qt7_onch';
-async function ocGet(m,sd){
-  const q=sd?'?startday='+sd:'/last',direct='https://bitcoin-data.com/v1/'+m+q,viaW=`${cfg.proxy}/onchain?m=${E(m)}${sd?'&startday='+sd:''}`;
-  let rt=LS.get(OCK+'_r','d'),err;
-  if(rt==='d'){try{return await getJSON(direct)}catch(e){err=e;if(/Rate-Limit/.test(e.message))throw e;LS.set(OCK+'_r','p')}}
-  try{return await yget(viaW,direct)}catch(e){throw err&&!cfg.proxy?new Error('Direktzugriff blockiert, '+e.message):e}
-}
-function ocRows(j){const arr=Array.isArray(j)?j:(j&&Array.isArray(j.data)?j.data:j?[j]:[]),SK=/^(d|day|date|time|timestamp|unixts|ts|theday|id)$/i;
-  const o=arr.map(x=>{if(Array.isArray(x))return{t:+x[0],v:+x[1]};if(x&&typeof x==='object'){let t=null,v=null;for(const k of Object.keys(x)){const y=x[k];if(SK.test(k)){t=typeof y==='number'?y:Date.parse(y)||null}else if(v==null&&y!=null&&y!==''&&isFinite(+y))v=+y}return{t,v}}return{t:null,v:+x}}).filter(x=>x.v!=null&&isFinite(x.v));
-  return o.every(x=>x.t!=null)?o.sort((a,b)=>a.t-b.t):o}
-async function onchain(){
-  const c=LS.get(OCK,null),now=Date.now(),old=c&&c.d&&now-c.t<2592e5;
-  if(c&&c.d&&now-c.t<432e5)return{...c.d,t:c.t};
-  const fl=LS.get(OCK+'_f',null);
-  if(fl&&now-fl.t<36e5)return old?{...c.d,t:c.t,stale:1,err:fl.m}:{err:fl.m};
-  const day=n=>new Date(now-n*864e5).toISOString().slice(0,10);
-  try{
-    const [m,s,p]=await Promise.all([ocGet('sth-mvrv',day(30)),ocGet('sth-sopr',day(14)),ocGet('sth-realized-price')]);
-    const M=ocRows(m),S=ocRows(s),R=ocRows(p);
-    if(!M.length||!S.length||!R.length)throw new Error('unerwartetes Datenformat');
-    const L=a=>a[a.length-1].v,d={mvrv:L(M),mvrv7:M.length>7?M[M.length-8].v:null,mvrv30:M[0].v,sopr:L(S),sopr7:S.slice(-7).reduce((q,x)=>q+x.v,0)/Math.min(7,S.length),rp:L(R)};
-    if(!(d.mvrv>.2&&d.mvrv<5&&d.sopr7>.5&&d.sopr7<2&&d.rp>1000))throw new Error('Werte nicht plausibel');
-    LS.set(OCK,{t:now,d});LS.set(OCK+'_f',null);return{...d,t:now}
-  }catch(e){LS.set(OCK+'_f',{t:now,m:e.message});return old?{...c.d,t:c.t,stale:1,err:e.message}:{err:e.message}}
-}
-function ocZone(v){return v<.8?['up','Ausverkauf: historisch oft eine Bodenzone, verlässlich erst mit Stabilisierung']:v<1?['wa','im Verlust: Verkaufsdruck, der Einstandskurs wirkt oft als Widerstand']:v<=1.3?['up','im Gewinn: der Einstandskurs dient oft als Unterstützung']:['dn','stark im Gewinn: erhöhtes Risiko für Gewinnmitnahmen']}
-function ocHtml(o,f,s){
-  if(!o)return '';
-  const row=v=>`<dt>On-Chain (kurzfristige Halter)<button class="i" data-info="onchain">?</button></dt><dd>${v}</dd>`;
-  if(o.mvrv==null)return row(`<span class="mu">nicht verfügbar (${esc(o.err||'?')})${cfg.proxy?'<br>Falls der Worker die Route /onchain nicht kennt: Worker-Code unter ⚙ neu kopieren.':'<br>Zuverlässiger mit eigenem Worker (⚙).'}</span>`);
-  const z=ocZone(o.mvrv),age=Math.round((Date.now()-o.t)/36e5),dm=o.mvrv7!=null?o.mvrv-o.mvrv7:null,so=o.sopr7;
-  return row(`STH-MVRV <b class="${z[0]}">${fmt(o.mvrv,2)}</b> (${fmt((o.mvrv-1)*100,0)} % zum Einstandskurs)${dm!=null?', 7 T '+(dm>=0?'+':'')+fmt(dm,2):''}<br><span class="${z[0]}">${z[1]}</span><br>SOPR Ø 7 T <b class="${so>=1.005?'up':so<=.995?'dn':'wa'}">${fmt(so,3)}</b> (${so>=1.005?'Gewinnmitnahmen':so<=.995?'Verlustverkäufe':'ausgeglichen'})<br>Einstandskurs ${s}${fmt(o.rp*f)}<br><span class="mu">Quelle BGeometrics, Stand vor ${age} h${o.stale?' (Aktualisierung fehlgeschlagen)':''}</span>`)}
 const RK={strong_buy:'Stark kaufen',buy:'Kaufen',hold:'Halten',underperform:'Untergewichten',sell:'Verkaufen'};
 async function analyst(a){
   const k='A|'+a.symbol,c=cache.get(k);if(c&&Date.now()-c.t<(c.d.err?3e5:216e5))return c.d;
@@ -737,9 +589,9 @@ async function analyst(a){
     const R=o=>o==null?null:(typeof o==='object'?(o.raw!=null?o.raw:null):o);
     const fd=r.financialData||{},tr=((r.recommendationTrend||{}).trend||[])[0]||{},ce=r.calendarEvents||{},ks=r.defaultKeyStatistics||{},ns=r.netSharePurchaseActivity||{};
     const now=Date.now()/1000,ed=(((ce.earnings||{}).earningsDate)||[]).map(R).filter(x=>x).find(x=>x>=now-86400)||null;
-    const et=(r.earningsTrend||{}).trend||[],est=p=>{const x=et.find(y=>y.period===p);return x&&x.earningsEstimate?{avg:R(x.earningsEstimate.avg),g:R(x.earningsEstimate.growth)}:null};
+    const et=(r.earningsTrend||{}).trend||[],est=p=>{const x=et.find(y=>y.period===p);return x&&x.earningsEstimate?{avg:R(x.earningsEstimate.avg),g:R(x.earningsEstimate.growth),rv:R((x.revenueEstimate||{}).avg),rg:R((x.revenueEstimate||{}).growth)}:null};
     d={tm:R(fd.targetMeanPrice),th:R(fd.targetHighPrice),tl:R(fd.targetLowPrice),n:R(fd.numberOfAnalystOpinions),rm:R(fd.recommendationMean),rk:fd.recommendationKey,
-      tr:{sb:tr.strongBuy,b:tr.buy,h:tr.hold,s:tr.sell,ss:tr.strongSell},ed,q0:est('0q'),y0:est('0y'),y1:est('+1y'),si:R(ks.shortPercentOfFloat),
+      tr:{sb:tr.strongBuy,b:tr.buy,h:tr.hold,s:tr.sell,ss:tr.strongSell},ed,q0:est('0q'),y0:est('0y'),y1:est('+1y'),si:R(ks.shortPercentOfFloat),so:R(ks.sharesOutstanding),
       ins:{buy:R(ns.buyInfoCount),sell:R(ns.sellInfoCount),net:R(ns.netInfoShares)},
       ud:(((r.upgradeDowngradeHistory||{}).history)||[]).slice(0,4).map(x=>({t:x.epochGradeDate,f:x.firm,to:x.toGrade,from:x.fromGrade,ac:x.action}))};
     if(d.tm==null&&d.ed==null&&!d.n)d={err:'keine Analystendaten für diesen Titel'};
@@ -749,10 +601,10 @@ async function analyst(a){
 const soft=(p,ms=8000)=>Promise.race([p,new Promise(r=>setTimeout(()=>r(null),ms))]);
 async function load(a){
   const ex=[(!a.crypto&&a.src==='yahoo')?fundamentals(a).catch(()=>null):Promise.resolve(null),(a.crypto||a.src==='yahoo')?news(a).catch(()=>null):Promise.resolve(null)];
-  const ayP=(!a.crypto&&a.src==='yahoo'&&cfg.proxy)?analyst(a):null,drP=a.crypto?deriv(a).catch(()=>null):null,ocP=a.symbol==='BTCUSDT'?onchain():null,B=benchOf(a),wkP=tf==='1w'?null:candles(a,'1w').catch(()=>null),bnP=B?candles(B,'1d').catch(()=>null):null,hiP=history(a).catch(()=>null);
+  const ayP=(!a.crypto&&a.src==='yahoo'&&cfg.proxy)?analyst(a):null,drP=a.crypto?deriv(a).catch(()=>null):null,B=benchOf(a),wkP=tf==='1w'?null:candles(a,'1w').catch(()=>null),bnP=B?candles(B,'1d').catch(()=>null):null,hiP=history(a).catch(()=>null);
   try{const d=await candles(a,tf);let daily=d;if(tf!=='1d')try{daily=await candles(a,'1d')}catch(e){daily=null}
-    const [fa,nw,wk,bn,hi,dr,ay,oc]=await Promise.all([...ex,wkP,bnP,hiP,drP,ayP,ocP].map(p=>soft(p)));
-    return{a,d,daily,fa,nw,wk:tf==='1w'?d:wk,bn,hi,dr,ay,oc,B}}catch(e){return{a,err:e.message}}
+    const [fa,nw,wk,bn,hi,dr,ay]=await Promise.all([...ex,wkP,bnP,hiP,drP,ayP].map(p=>soft(p)));
+    return{a,d,daily,fa,nw,wk:tf==='1w'?d:wk,bn,hi,dr,ay,B}}catch(e){return{a,err:e.message}}
 }
 async function render(){
   const my=++token;busy=true;
@@ -779,31 +631,8 @@ async function render(){
     const vpAll=volProfile(d.slice(-250));
     const vzS=vpAll?vpAll.nodes.filter(n=>n.p<an.last).map(n=>n.p).sort((x,y)=>y-x):[],vzR=vpAll?vpAll.nodes.filter(n=>n.p>an.last).map(n=>n.p).sort((x,y)=>x-y):[];
     const ayx=r.ay&&!r.ay.err?{tm:r.ay.tm!=null?r.ay.tm*f:null,up:r.ay.tm!=null?(r.ay.tm*f/an.last-1)*100:null,n:r.ay.n,rm:r.ay.rm,rkl:RK[r.ay.rk]||'',days:r.ay.ed?Math.round((r.ay.ed-Date.now()/1000)/86400):null}:null;
-    const adxv=adx(d),sq=squeeze(d),stc=structure(d),dv=divergence(d),vr=volReg(d),ew=r.daily&&r.daily.length>60?ewma(r.daily,a.crypto):null,bc=bootCone(r.hi,a.crypto);
-    const hs=r.hi?btSeries(r.hi):null,sb=hs?setupBt(r.hi,a.crypto,hs):null,ft=hs?factorTest(r.hi,a.crypto,hs):null;
-    const TR=(l,i,v)=>v?`<dt>${l}<button class="i" data-info="${i}">?</button></dt><dd>${v}</dd>`:'';
-    const techRows=
-      TR('Trendstärke (ADX)','adx',adxv&&`${fmt(adxv.adx,0)} <span class="${adxv.adx>=25?'up':'wa'}">(${adxv.adx>=25?'Trend':adxv.adx<20?'kein Trend / Seitwärts':'Übergang'})</span><br>+DI ${fmt(adxv.pdi,0)} · −DI ${fmt(adxv.mdi,0)}`)+
-      TR('Bollinger-Squeeze','sq',sq&&`Bandbreite ${fmt(sq.bw,1)} % (Perzentil ${fmt(sq.pc,0)})<br><span class="${sq.pc<=15?'wa':'mu'}">${sq.pc<=15?'Verengung: Ausbruch möglich, Richtung offen':sq.pc>=85?'Bänder weit, Beruhigung wahrscheinlich':'normal'}</span>`)+
-      TR('Marktstruktur','struct',stc&&`<span class="${stc.t}">${stc.t==='up'?'Höhere Hochs und Tiefs':stc.t==='dn'?'Tiefere Hochs und Tiefs':'gemischt'}</span>${stc.bos?`<br><span class="${stc.bos==='up'?'up':'dn'}">Strukturbruch ${stc.bos==='up'?'nach oben (über '+s+fmt(stc.hi)+')':'nach unten (unter '+s+fmt(stc.lo)+')'}</span>`:''}`)+
-      TR('RSI-Divergenz','div',dv&&`<span class="${dv.t==='bull'?'up':'dn'}">${dv.t==='bull'?'bullisch':'bärisch'}</span> (vor ${dv.age} Kerzen)`)+
-      TR('Volatilitäts-Regime','vreg',vr&&`ATR ${fmt(vr.atrp,2)} % · Perzentil ${fmt(vr.pc,0)}<br><span class="mu">${vr.pc>=80?'hohe Volatilität':vr.pc<=20?'ruhiger Markt':'normal'}</span>${ew&&vol?`<br>EWMA-Vola ${fmt(ew*100,0)} % vs. Ø ${fmt(vol.ann*100,0)} % p. a.`:''}`);
-    const ocRow=a.symbol==='BTCUSDT'?ocHtml(r.oc,f,s):'';
-    const bootRow=bc?`<dt>Spanne Bootstrap<button class="i" data-info="boot">?</button></dt><dd>${bc.map(x=>`${x.l}: ${s}${fmt(an.last*Math.exp(x.p16))} – ${s}${fmt(an.last*Math.exp(x.p84))}<br><span class="mu">90 %: ${s}${fmt(an.last*Math.exp(x.p5))} – ${s}${fmt(an.last*Math.exp(x.p95))}</span>`).join('<br>')}</dd>`:'';
-    const vd=verdict(an,st,vol,s,r.fa,r.nw,{mtf,rs:rsx,bt,ax,dr:r.dr,ay:ayx,oc:r.oc,tx:{adx:adxv,stc,dv,sq,vr,sb,ft,bc},vz:{sup:vzS.length?vzS[0]:null,res:vzR.length?vzR[0]:null}});
-    AIC[a.symbol]={asset:a.name,symbol:a.symbol,typ:a.crypto?'Krypto':'Aktie/ETF',zeitrahmen:tf,waehrung:cur,kurs:an.last,aenderung_pct:+an.chg.toFixed(2),trend:an.regime,ema_kreuz:an.cross,rsi:an.rsi?+an.rsi.toFixed(1):null,macd_hist_positiv:an.hist>=0,atr_pct:+(an.atr/an.last*100).toFixed(2),support:an.sup,resistance:an.res,fibonacci:an.fib.map(x=>+x.v.toFixed(4)),setup:{richtung:st.dir,entry:st.entry,stop:st.stop,ziel:st.target,crv:st.crv},vola_jahr_pct:vol?+(vol.ann*100).toFixed(0):null,trend_tag_vs_woche:mtf?[mtf.d.cls,mtf.w.cls]:null,rel_staerke:rsx?{vs:rsx.name,r6:rsx.r6,stark:rsx.strong}:null,fundamental:r.fa||null,analysten:ayx||null,derivate:r.dr||null,schlagzeilen:(r.nw||[]).map(x=>x.t),szenario_korridore:[2026,2027].map(y=>{if(!vol)return null;const t=Math.max(0,(new Date(y,11,31)-Date.now())/31557600000),sd=vol.ann*Math.sqrt(t),f=k=>[+(an.last*Math.exp(-k*sd)).toFixed(2),+(an.last*Math.exp(k*sd)).toFixed(2)];return{ende:y,restlaufzeit_jahre:+t.toFixed(2),neutral_ohne_trend_68pct:f(1),neutral_ohne_trend_95pct:f(2)}}).filter(Boolean),onchain_btc:r.oc&&r.oc.mvrv!=null?{sth_mvrv:rd(r.oc.mvrv,2),sth_mvrv_vor_7_tagen:rd(r.oc.mvrv7,2),sth_mvrv_vor_30_tagen:rd(r.oc.mvrv30,2),sth_sopr_7t_schnitt:rd(r.oc.sopr7,3),sth_einstandskurs:rd(r.oc.rp*f),stand_vor_h:Math.round((Date.now()-r.oc.t)/36e5),hinweis:'STH = Coins jünger als 155 Tage; MVRV unter 1 = Käufer im Verlust; SOPR unter 1 = Verlustverkäufe'}:null,
-      urteil_punkte:Object.fromEntries(vd.br.filter(x=>x[1]!==0)),urteil_summe:vd.tot,
-      technik_zusatz:{adx:adxv?{adx:rd(adxv.adx,0),plus_di:rd(adxv.pdi,0),minus_di:rd(adxv.mdi,0)}:null,marktstruktur:stc?{trend:stc.t,strukturbruch:stc.bos}:null,rsi_divergenz:dv||null,squeeze_bandbreite_perzentil:sq?rd(sq.pc,0):null,atr_perzentil:vr?rd(vr.pc,0):null,ewma_vola_pct:ew?rd(ew*100,0):null},
-      bootstrap_korridore_68pct:bc?bc.map(x=>({horizont:x.l,von:rd(an.last*Math.exp(x.p16)),bis:rd(an.last*Math.exp(x.p84))})):null,
-      setup_backtest:sb?{kosten_pct:sb.cost,max_haltedauer_tage:sb.mh,long:sb.L,short:sb.S,hinweis:'R = Risiko bis Stop; oos = letzte 40 % der Historie, ungesehen'}:null,
-      faktorpruefung_diff_pct:ft?ft.map(x=>({faktor:x.l,diff:rd(x.diff,1)})):null,
-      backtest_signal:bt?{aktuell:bt.cur,jahre:rd(bt.yrs,1),horizonte:bt.hz.map(h=>({tage:h.H,aktuelles_signal:h[bt.cur],alle_tage:h.all}))}:null,
-      risiko:ax&&ax.risk?{max_drawdown_pct:rd(ax.risk.mdd,0),vom_hoch_pct:rd(ax.risk.dd,0),sharpe:rd(ax.risk.sharpe,2),sortino:rd(ax.risk.sortino,2),var95_pct:rd(ax.risk.var95,1),cvar_pct:rd(ax.risk.cvar,1)}:null,
-      historische_verteilung:ax&&ax.dist?ax.dist.filter(x=>x.p50!=null).map(x=>({horizont:x.l,p10:rd(x.p10*100,0),median:rd(x.p50*100,0),p90:rd(x.p90*100,0),median_bei_signal:x.c50!=null?rd(x.c50*100,0):null})):null,
-      saisonalitaet_aktueller_monat:ax&&ax.season[new Date().getUTCMonth()]||null,
-      volumenprofil:vpAll?{poc:rd(vpAll.poc),value_area:[rd(vpAll.val),rd(vpAll.vah)],support_zonen:vzS.slice(0,2).map(x=>rd(x)),widerstands_zonen:vzR.slice(0,2).map(x=>rd(x))}:null,
-      volumen_vs_schnitt_pct:(()=>{const v=d.map(x=>x.vol),n=v.length;if(n>22&&v[n-1]>0){const av=v.slice(n-21,n-1).reduce((p,q)=>p+q,0)/20;return av>0?rd(v[n-1]/av*100,0):null}return null})(),
-      regelbasiertes_urteil:vd.lab,regelbasierte_begruendung:vd.html.replace(/<[^>]+>/g,'')};
+    const vd=verdict(an,st,vol,s,r.fa,r.nw,{mtf,rs:rsx,bt,ax,dr:r.dr,ay:ayx,vz:{sup:vzS.length?vzS[0]:null,res:vzR.length?vzR[0]:null}});
+    AIC[a.symbol]={asset:a.name,symbol:a.symbol,typ:a.crypto?'Krypto':'Aktie/ETF',zeitrahmen:tf,waehrung:cur,kurs:an.last,aenderung_pct:+an.chg.toFixed(2),trend:an.regime,ema_kreuz:an.cross,rsi:an.rsi?+an.rsi.toFixed(1):null,macd_hist_positiv:an.hist>=0,atr_pct:+(an.atr/an.last*100).toFixed(2),support:an.sup,resistance:an.res,fibonacci:an.fib.map(x=>+x.v.toFixed(4)),setup:{richtung:st.dir,entry:st.entry,stop:st.stop,ziel:st.target,crv:st.crv},vola_jahr_pct:vol?+(vol.ann*100).toFixed(0):null,trend_tag_vs_woche:mtf?[mtf.d.cls,mtf.w.cls]:null,rel_staerke:rsx?{vs:rsx.name,r6:rsx.r6,stark:rsx.strong}:null,fundamental:r.fa?{...r.fa,marktkap:mcOf(r.fa,r)||null,fcf_rendite_pct:(r.fa.fcf!=null&&mcOf(r.fa,r))?+(r.fa.fcf/mcOf(r.fa,r)*100).toFixed(1):null}:null,analysten:ayx||null,derivate:r.dr||null,schlagzeilen:(r.nw||[]).map(x=>x.t),szenario_korridore:[2026,2027].map(y=>{if(!vol)return null;const t=Math.max(0,(new Date(y,11,31)-Date.now())/31557600000),sd=vol.ann*Math.sqrt(t),f=k=>[+(an.last*Math.exp(-k*sd)).toFixed(2),+(an.last*Math.exp(k*sd)).toFixed(2)];return{ende:y,restlaufzeit_jahre:+t.toFixed(2),neutral_ohne_trend_68pct:f(1),neutral_ohne_trend_95pct:f(2)}}).filter(Boolean),regelbasiertes_urteil:vd.lab,regelbasierte_begruendung:vd.html.replace(/<[^>]+>/g,'')};
     const LB={up:'Aufwärtstrend',dn:'Abwärtstrend',wa:'Übergangsphase'};
     const mtfRow=mtf?`<dt>Mehrzeitebenen<button class="i" data-info="mtf">?</button></dt><dd>Tag ${dd.arrow} · Woche ${ww.arrow}<br><span class="${dd.cls===ww.cls&&dd.cls!=='wa'?dd.cls:'wa'}">${dd.cls===ww.cls?(dd.cls==='wa'?'beide ohne Richtung':'übereinstimmend'):'widersprüchlich'}</span></dd>`:'';
     const rsRow=rsx?`<dt>Rel. Stärke vs ${esc(rsx.name)}<button class="i" data-info="rs">?</button></dt><dd>${[['3 Mon',rsx.r3],['6 Mon',rsx.r6],['1 J',rsx.r12]].filter(x=>x[1]!=null).map(([l,v])=>`${l} <span class="${v>=0?'up':'dn'}">${v>=0?'+':''}${fmt(v,1)} %</span>`).join(' · ')}<br><span class="${rsx.strong?'up':'dn'}">${rsx.strong?'Trend: stärker':'Trend: schwächer'}</span></dd>`:'';
@@ -812,7 +641,7 @@ async function render(){
     const fr=(l,v)=>v==null?'':`<dt>${l}</dt><dd>${v}</dd>`;
     let fundRows='';
     if(a.crypto)fundRows=fr('Fundamental','<span class="mu">n. a. (Krypto)</span>');
-    else if(a.src==='yahoo'){const f=r.fa;fundRows=f?`<dt>Fundamental<button class="i" data-info="fa">?</button></dt><dd class="mu">zuletzt gemeldet (Yahoo)</dd>`+fr('KGV / KBV / KUV',[f.pe,f.pb,f.ps].map(v=>v==null?'–':fmt(v,1)).join(' / '))+fr('EV/EBITDA',f.ev==null?null:fmt(f.ev,1))+fr('Umsatzwachstum',f.gr==null?null:`<span class="${f.gr>=0?'up':'dn'}">${fmt(f.gr,1)} %</span>`)+fr('Nettomarge',f.nm==null?null:`<span class="${f.nm>=0?'up':'dn'}">${fmt(f.nm,1)} %</span>`)+fr('Schulden/Eigenkapital',f.de==null?null:fmt(f.de,0)+' %')+fr('Dividendenrendite',f.dy==null?null:fmt(f.dy,2)+' %')+fr('52-Wochen-Spanne',f.hi&&f.lo&&f.price?`${fmt((f.price/f.hi-1)*100,0)} % vom Hoch · ${fmt((f.price/f.lo-1)*100,0)} % über Tief`:null):fr('Fundamental','<span class="mu">nicht verfügbar</span>')}
+    else if(a.src==='yahoo'){const f=r.fa;fundRows=f?`<dt>Fundamental<button class="i" data-info="fa">?</button></dt><dd class="mu">zuletzt gemeldet (Yahoo)</dd>`+fr('KGV / KBV / KUV',[f.pe,f.pb,f.ps].map(v=>v==null?'–':fmt(v,1)).join(' / '))+fr('EV/EBITDA',f.ev==null?null:fmt(f.ev,1))+fr('Umsatzwachstum',f.gr==null?null:`<span class="${f.gr>=0?'up':'dn'}">${fmt(f.gr,1)} %</span>`)+fr('Nettomarge',f.nm==null?null:`<span class="${f.nm>=0?'up':'dn'}">${fmt(f.nm,1)} %</span>`)+fr('Marktkapitalisierung',mcOf(f,r)?big(mcOf(f,r)):null)+fr('Free Cashflow',f.fcf==null?null:`<span class="${f.fcf>=0?'up':'dn'}">${big(f.fcf)}</span><br><span class="mu">${f.fcfm!=null?'Marge '+fmt(f.fcfm,1)+' %':''}${mcOf(f,r)?' · Rendite '+fmt(f.fcf/mcOf(f,r)*100,1)+' %':''}</span>`)+fr('Schulden/Eigenkapital',f.de==null?null:fmt(f.de,0)+' %')+fr('Dividendenrendite',f.dy==null?null:fmt(f.dy,2)+' %')+fr('52-Wochen-Spanne',f.hi&&f.lo&&f.price?`${fmt((f.price/f.hi-1)*100,0)} % vom Hoch · ${fmt((f.price/f.lo-1)*100,0)} % über Tief`:null):fr('Fundamental','<span class="mu">nicht verfügbar</span>')}
     let newsHtml='';
     if(r.nw&&r.nw.length){const sn=sentiment(r.nw);
       const ago=t=>{const h=Math.round((Date.now()/1000-t)/3600);return h<1?'gerade eben':h<48?`vor ${h} h`:`vor ${Math.round(h/24)} Tagen`};
@@ -843,6 +672,7 @@ async function render(){
           fr('Empfehlung',y.rk&&y.rk!=='none'?`${RK[y.rk]||esc(y.rk)}${y.rm?' ('+fmt(y.rm,1)+' von 5)':''}${trs?'<br><span class="mu">SK/K/H/V/SV: '+trs+'</span>':''}`:null)+
           fr('Quartalszahlen',y.ed?`${dtf(y.ed)}${days!=null?' (in '+days+' Tagen)':''}${days!=null&&days>=0&&days<=14?'<br><span class="wa">Zahlen stehen bald an: erhöhtes Kursrisiko</span>':''}`:null)+
           fr('Gewinnschätzung (EPS)',eps||null)+
+          fr('Umsatzschätzung',[['lfd. Jahr',y.y0],['Folgejahr',y.y1]].filter(x=>x[1]&&x[1].rv!=null).map(([l,x])=>`${l} ${big(x.rv)}${x.rg!=null?' ('+(x.rg>=0?'+':'')+fmt(x.rg*100,1)+' %)':''}`).join('<br>')||null)+
           fr('Insider (6 Mon)',y.ins&&(y.ins.buy!=null||y.ins.sell!=null)?`${y.ins.buy||0} Käufe / ${y.ins.sell||0} Verkäufe${y.ins.net!=null?'<br><span class="'+(y.ins.net>=0?'up':'dn')+'">netto '+(y.ins.net>=0?'+':'')+fmt(y.ins.net,0)+' Aktien</span>':''}`:null)+
           fr('Leerverkäufer',y.si!=null?fmt(y.si*100,1)+' % des Streubesitzes':null);
         const AC={up:'hochgestuft',down:'herabgestuft',main:'bestätigt',init:'neu aufgenommen',reit:'bekräftigt'};
@@ -872,9 +702,9 @@ async function render(){
     card.innerHTML=`
     <div class="hd"><div><div class="nm">${esc(a.name)} <span class="mu">${esc(a.symbol)}</span></div>
       <div class="pr">${s}${fmt(an.last)} <span class="${an.chg>=0?'up':'dn'}" style="font-size:.8rem">${an.chg>=0?'▲':'▼'} ${fmt(Math.abs(an.chg),2)} %</span></div>
-      <span class="tag ${an.cls}">${an.arrow} ${an.regime}</span><button class="i" data-info="trend" style="margin-top:4px">?</button></div>
+      <span class="tag ${an.cls}">${an.arrow} ${an.regime}</span></div>
       <div class="row" style="align-items:flex-start"><button data-act="alert" data-sym="${esc(a.symbol)}" title="Preisalarm">🔔${al||''}</button><button data-act="del" data-sym="${esc(a.symbol)}">✕</button></div></div>
-    <div style="background:var(--inf);border-radius:8px;padding:9px;margin-top:8px;font-size:.78rem;line-height:1.55"><b>Bewertung:</b> ${vd.html}<details style="margin-top:6px"><summary class="mu">Wie entsteht das Urteil? Summe ${vd.tot>0?'+':''}${vd.tot} (ab +4 konstruktiv, ab −4 vorsichtig)</summary><table style="margin-top:4px">${vd.br.filter(x=>x[1]!==0).map(x=>`<tr><td style="text-align:left">${x[0]}</td><td class="${x[1]>0?'up':'dn'}">${x[1]>0?'+':''}${x[1]}</td></tr>`).join('')}</table></details></div>
+    <div style="background:var(--inf);border-radius:8px;padding:9px;margin-top:8px;font-size:.78rem;line-height:1.55"><b>Bewertung:</b> ${vd.html}</div>
     <div class="row" style="margin-top:8px"><button class="pri" data-act="ai" data-sym="${esc(a.symbol)}">🤖 KI-Analyse</button><label class="mu" style="display:flex;gap:6px;align-items:center;margin-left:10px"><input type="checkbox" class="ai-free" ${AIFREE?'checked':''}> Freier Modus (Prognosen)</label></div><div class="ai" data-sym="${esc(a.symbol)}" style="display:none"></div>
     <div class="ch" id="ch-${esc(a.symbol.replace(/[^A-Z0-9]/g,'_'))}"></div>
     <div class="mu">Grün: EMA 50 · Gelb: EMA 200 · Grau gestrichelt: Fibonacci</div>
@@ -885,8 +715,8 @@ async function render(){
       <dt>ATR (14)<button class="i" data-info="atr">?</button></dt><dd>${s}${fmt(an.atr)} (${fmt(an.atr/an.last*100,2)} %)</dd>
       <dt>Support / Resistance<button class="i" data-info="sr">?</button></dt><dd>${an.sup?s+fmt(an.sup):'–'} / ${an.res?s+fmt(an.res):'–'}</dd>
       <dt>Fibonacci (Szenario)<button class="i" data-info="fib">?</button></dt><dd>${an.fib.map(x=>s+fmt(x.v)).join(' · ')}</dd>
-      <dt>Spanne 1σ<button class="i" data-info="scen">?</button></dt><dd>${scen}</dd>${ocRow}${bootRow}${techRows}${mtfRow}${rsRow}${volRow}${vpRow}${seaRow}${drRows}${fundRows}${ayRows}
-    </dl>${newsHtml}${ayHtml}${btHtml}${btExtraHtml(sb,ft)}${axHtml}
+      <dt>Spanne 1σ<button class="i" data-info="scen">?</button></dt><dd>${scen}</dd>${mtfRow}${rsRow}${volRow}${vpRow}${seaRow}${drRows}${fundRows}${ayRows}
+    </dl>${newsHtml}${ayHtml}${btHtml}${axHtml}
     <div class="setup"><b>Trade-Setup (${st.dir})</b><button class="i" data-info="crv">?</button> <span class="mu">${st.auto?'automatisch: Stop 2 ATR, Ziel nächste Resistance':'manuell'}</span>
       <div class="in" data-sym="${esc(a.symbol)}" data-f="${f}">
         <div><label>Entry</label><input type="number" step="any" data-k="entry" value="${+st.entry.toPrecision(7)}"></div>
@@ -897,8 +727,7 @@ async function render(){
       ${st.size&&st.size*st.entry>cfg.capital?'<br><span class="wa">Positionswert übersteigt Kapital (Hebel nötig)</span>':''}
       ${an.rsi&&an.cls==='dn'&&st.dir==='Long'?'<br><span class="wa">Long gegen den Abwärtstrend</span>':''}
       <button data-act="reset" data-sym="${esc(a.symbol)}" style="margin-top:6px">Auto-Werte</button></div></div>
-    <div class="mu" style="margin-top:8px">Stand: ${hhmm(Date.now())} · Letzte Kerze vor ${age} h · Quelle: ${srcName(a)} · ${tf.toUpperCase()}<br>Zusatzdaten: ${[...(a.crypto?[['Derivate',r.dr]]:[['Fundamental',r.fa]]),...(!a.crypto&&cfg.proxy&&a.src==='yahoo'?[['Analysten',r.ay&&!r.ay.err]]:[]),...(a.symbol==='BTCUSDT'?[['On-Chain',r.oc&&r.oc.mvrv!=null]]:[]),['News',r.nw&&r.nw.length],['Wochentrend',mtf],['Benchmark',rsx],['Backtest',bt],['Risiko/Verteilung',ax]].map(([l,v])=>`<span class="${v?'up':'dn'}">${v?'✓':'✗'}</span> ${l}`).join(' · ')}</div>`;
-    card.querySelectorAll('dt').forEach(t=>{const k=LBK[t.textContent.trim()];if(k&&!t.querySelector('.i'))t.insertAdjacentHTML('beforeend',`<button class="i" data-info="${k}">?</button>`)});
+    <div class="mu" style="margin-top:8px">Stand: ${hhmm(Date.now())} · Letzte Kerze vor ${age} h · Quelle: ${srcName(a)} · ${tf.toUpperCase()}<br>Zusatzdaten: ${[...(a.crypto?[['Derivate',r.dr]]:[['Fundamental',r.fa]]),...(!a.crypto&&cfg.proxy&&a.src==='yahoo'?[['Analysten',r.ay&&!r.ay.err]]:[]),['News',r.nw&&r.nw.length],['Wochentrend',mtf],['Benchmark',rsx],['Backtest',bt],['Risiko/Verteilung',ax]].map(([l,v])=>`<span class="${v?'up':'dn'}">${v?'✓':'✗'}</span> ${l}`).join(' · ')}</div>`;
     $('#grid').insertBefore(card,$('#macro'));
     mkChart(card.querySelector('.ch'),d,an,st);
     {const h=LS.get(aiKey(a.symbol),null);if(h&&Date.now()-h.t<18e5)aiShow(card.querySelector('.ai'),h.o,h.t)}
@@ -958,11 +787,13 @@ async function loadMacro(){
   $('#macro-body').innerHTML=out.join('')+`<div class="mu" style="margin-top:8px">Stand: ${hhmm(Date.now())}. Marktbreite, Kreditaufschläge und Wirtschaftskalender fehlen noch: dafür gibt es keine freie Quelle ohne Konto.</div>`;
 }
 
+function big(n){return n==null?null:Math.abs(n)>=1e9?fmt(n/1e9,2)+' Mrd.':Math.abs(n)>=1e6?fmt(n/1e6,0)+' Mio.':fmt(n,0)}
+function mcOf(f,r){return r&&r.ay&&r.ay.so&&f.price?r.ay.so*f.price:f.mc}
 /* ---------- KI ---------- */
 let AIFREE=!!LS.get('qt7_aifree',0);
 const AIC={},AIO={},aiKey=y=>'qt7_ai_'+y+'_'+tf+'_'+cur+(AIFREE?'_f':''),aiData=y=>{const c={...AIC[y]};if(!AIFREE)delete c.szenario_korridore;return c};
-const AIS=`Du bist ein nüchterner Research-Analyst für ein Multi-Asset-Dashboard. Du bekommst fertig berechnete Marktdaten als JSON. Rechne nichts neu und erfinde keine Zahlen, Kurse oder Ereignisse; nutze nur die gelieferten Werte. Trenne Fakt, Signal und Szenario. Berücksichtige ALLE gelieferten Felder, besonders urteil_punkte (Zerlegung des regelbasierten Urteils), technik_zusatz, setup_backtest (die ungesehene Periode oos ist maßgeblich), faktorpruefung_diff_pct, bootstrap_korridore_68pct, onchain_btc, risiko, historische_verteilung, saisonalitaet, volumenprofil, derivate, analysten und fundamental. Gewichte historisch bewährte Signale höher und benenne Signale, die sich in der Validierung nicht bewährt haben. Suche gezielt nach Widersprüchen zwischen den Signalen (z. B. Tages- vs. Wochentrend, Trend vs. Fundamentaldaten, Funding/Positionierung vs. Preis). Bewerte die Schlagzeilen nach Relevanz, nicht nach Stichworten. Keine Anlageberatung, keine Kauf-/Verkaufsempfehlung; benenne Unsicherheit offen. Das kurzfazit ist für Laien gedacht: einfache Sprache, keine Abkürzungen (kein EMA, RSI, ATR, MACD), sagt klar ob die Lage eher bullisch oder bärisch ist und warum, passt zur Gesamtlage und zum regelbasierten Urteil (Abweichung kurz begründen), keine Kauf-/Verkaufsempfehlung. Antworte NUR mit JSON ohne Markdown: {"kurzfazit":{"tendenz":"bullisch|eher bullisch|neutral|eher bärisch|bärisch","satz":"Kernaussage, max. 20 Wörter","laien":"1-2 Sätze ohne Fachbegriffe"},"einordnung":"max. 4 Sätze","widersprueche":["..."],"ungueltig_wenn":["konkrete Preis- oder Datenbedingung, bei der das Setup hinfällig wäre"],"nachrichten":{"stimmung":"positiv|neutral|negativ|gemischt|keine","begruendung":"1-2 Sätze"},"konfidenz":"niedrig|mittel|hoch"}`;
-const AIS_FREE=`Du bist ein erfahrener Research-Analyst für ein Multi-Asset-Dashboard. FREIER MODUS: Du bekommst fertig berechnete Marktdaten als JSON, darfst aber darüber hinaus denken, dein allgemeines Marktwissen einbeziehen und Prognosen wagen. Gib für Ende 2026 und Ende 2027 je ein bullisches, ein neutrales und ein bärisches Szenario mit Kurskorridor und grober Eintrittswahrscheinlichkeit in Prozent (Summe 100) sowie eine Tendenz an. Nutze szenario_korridore, Analystenziel, Trend, Support und Resistance als Anker. Kennzeichne klar, was aus den Daten stammt und was deine eigene Einschätzung oder Annahme ist. Erfinde keine konkreten Ereignisse, Termine oder Kennzahlen. Berücksichtige ALLE gelieferten Felder, besonders urteil_punkte (Zerlegung des regelbasierten Urteils), technik_zusatz, setup_backtest (die ungesehene Periode oos ist maßgeblich), faktorpruefung_diff_pct, bootstrap_korridore_68pct, onchain_btc, risiko, historische_verteilung, saisonalitaet, volumenprofil, derivate, analysten und fundamental. Gewichte historisch bewährte Signale höher und benenne Signale, die sich in der Validierung nicht bewährt haben. Suche gezielt nach Widersprüchen zwischen den Signalen (z. B. Tages- vs. Wochentrend, Trend vs. Fundamentaldaten, Funding/Positionierung vs. Preis). Bewerte die Schlagzeilen nach Relevanz, nicht nach Stichworten. Keine Anlageberatung; Prognosen sind spekulativ. Das kurzfazit ist für Laien gedacht: einfache Sprache, keine Abkürzungen (kein EMA, RSI, ATR, MACD), sagt klar ob die Lage eher bullisch oder bärisch ist und warum, passt zur Gesamtlage und zum regelbasierten Urteil (Abweichung kurz begründen), keine Kauf-/Verkaufsempfehlung. Antworte NUR mit JSON ohne Markdown: {"kurzfazit":{"tendenz":"bullisch|eher bullisch|neutral|eher bärisch|bärisch","satz":"Kernaussage, max. 20 Wörter","laien":"1-2 Sätze ohne Fachbegriffe"},"einordnung":"max. 4 Sätze","widersprueche":["..."],"ungueltig_wenn":["..."],"nachrichten":{"stimmung":"positiv|neutral|negativ|gemischt|keine","begruendung":"1-2 Sätze"},"ausblick":{"ende_2026":"Szenarien mit Kurskorridor und Wahrscheinlichkeit, 2-3 Sätze","ende_2027":"Szenarien mit Kurskorridor und Wahrscheinlichkeit, 2-3 Sätze"},"konfidenz":"niedrig|mittel|hoch"}`;
+const AIS=`Du bist ein nüchterner Research-Analyst für ein Multi-Asset-Dashboard. Du bekommst fertig berechnete Marktdaten als JSON. Rechne nichts neu und erfinde keine Zahlen, Kurse oder Ereignisse; nutze nur die gelieferten Werte. Trenne Fakt, Signal und Szenario. Suche gezielt nach Widersprüchen zwischen den Signalen (z. B. Tages- vs. Wochentrend, Trend vs. Fundamentaldaten, Funding/Positionierung vs. Preis). Bewerte die Schlagzeilen nach Relevanz, nicht nach Stichworten. Keine Anlageberatung, keine Kauf-/Verkaufsempfehlung; benenne Unsicherheit offen. Antworte NUR mit JSON ohne Markdown: {"einordnung":"max. 4 Sätze","widersprueche":["..."],"ungueltig_wenn":["konkrete Preis- oder Datenbedingung, bei der das Setup hinfällig wäre"],"nachrichten":{"stimmung":"positiv|neutral|negativ|gemischt|keine","begruendung":"1-2 Sätze"},"konfidenz":"niedrig|mittel|hoch"}`;
+const AIS_FREE=`Du bist ein erfahrener Research-Analyst für ein Multi-Asset-Dashboard. FREIER MODUS: Du bekommst fertig berechnete Marktdaten als JSON, darfst aber darüber hinaus denken, dein allgemeines Marktwissen einbeziehen und Prognosen wagen. Gib für Ende 2026 und Ende 2027 je ein bullisches, ein neutrales und ein bärisches Szenario mit Kurskorridor und grober Eintrittswahrscheinlichkeit in Prozent (Summe 100) sowie eine Tendenz an. Nutze szenario_korridore, Analystenziel, Trend, Support und Resistance als Anker. Kennzeichne klar, was aus den Daten stammt und was deine eigene Einschätzung oder Annahme ist. Erfinde keine konkreten Ereignisse, Termine oder Kennzahlen. Suche gezielt nach Widersprüchen zwischen den Signalen (z. B. Tages- vs. Wochentrend, Trend vs. Fundamentaldaten, Funding/Positionierung vs. Preis). Bewerte die Schlagzeilen nach Relevanz, nicht nach Stichworten. Keine Anlageberatung; Prognosen sind spekulativ. Antworte NUR mit JSON ohne Markdown: {"einordnung":"max. 4 Sätze","widersprueche":["..."],"ungueltig_wenn":["..."],"nachrichten":{"stimmung":"positiv|neutral|negativ|gemischt|keine","begruendung":"1-2 Sätze"},"ausblick":{"ende_2026":"Szenarien mit Kurskorridor und Wahrscheinlichkeit, 2-3 Sätze","ende_2027":"Szenarien mit Kurskorridor und Wahrscheinlichkeit, 2-3 Sätze"},"konfidenz":"niedrig|mittel|hoch"}`;
 const AIQ='Beantworte die Frage zum Asset auf Deutsch, knapp (max. 5 Sätze), nur auf Basis der gelieferten Daten. Gibt die Datenlage es nicht her, sag das. Keine Anlageberatung.';
 const AIQ_FREE='FREIER MODUS: Beantworte die Frage zum Asset auf Deutsch (max. 8 Sätze). Du darfst über die gelieferten Daten hinaus denken und Prognosen wagen. Bei Fragen zur Entwicklung bis zu einem Datum gib Szenarien (bullisch, neutral, bärisch) mit Kurskorridoren und grober Wahrscheinlichkeit, gestützt auf szenario_korridore, Analystenziel, Trend, Support und Resistance. Trenne Daten von eigener Einschätzung, nenne es spekulativ, erfinde keine Ereignisse oder Kennzahlen. Keine Anlageberatung.';
 const AIM='Fasse die Marktumfeld-Daten auf Deutsch in 3 bis 4 Sätzen zusammen: Risk-on oder Risk-off, was treibt das Bild, was ist auffällig. Nur gelieferte Werte nutzen, keine Prognosen, keine Anlageberatung. Reiner Text.';
@@ -976,20 +807,18 @@ async function aiCall(system,messages){
 const aiLi=(t,l)=>{l=Array.isArray(l)?l:l?[l]:[];return l.length?`<h4>${t}</h4><ul>${l.map(x=>`<li>${esc(typeof x==='string'?x:JSON.stringify(x))}</li>`).join('')}</ul>`:''};
 function aiShow(box,o,t){
   if(!box)return;if(o.nachrichten&&typeof o.nachrichten==='string')o.nachrichten={stimmung:'',begruendung:o.nachrichten};const y=box.dataset.sym;AIO[y]=o;box.style.display='';
-  const kf=o.kurzfazit&&typeof o.kurzfazit==='object'?o.kurzfazit:null,tk=String(kf&&kf.tendenz||'').toLowerCase(),kc=/bär|baer|bear/.test(tk)?'dn':/bull/.test(tk)?'up':'wa';
-  const kfHtml=kf&&(kf.satz||kf.tendenz)?`<div style="margin:6px 0;padding:8px;border-radius:8px;background:var(--inf)"><span class="tag ${kc}">${kc==='up'?'▲':kc==='dn'?'▼':'▬'} ${esc(kf.tendenz||'')}</span> <b>${esc(kf.satz||'')}</b>${kf.laien?`<div class="mu" style="margin-top:4px">${esc(kf.laien)}</div>`:''}</div>`:'';
-  box.innerHTML=`<b>KI-Einordnung</b> <span class="mu">Konfidenz: ${esc(o.konfidenz||'–')}${o._f?' · Freier Modus':''}${t?' · Stand '+hhmm(t):''}</span>${kfHtml}<p>${esc(o.einordnung||'')}</p>`+aiLi('Widersprüche',o.widersprueche)+aiLi('Ungültig, wenn',o.ungueltig_wenn)+(o.ausblick&&typeof o.ausblick==='object'?`<h4>Ausblick (Szenarien, spekulativ)</h4><div>${esc(o.ausblick.ende_2026||'')}</div><div style="margin-top:4px">${esc(o.ausblick.ende_2027||'')}</div>`:'')+(o.nachrichten&&o.nachrichten.begruendung&&o.nachrichten.stimmung!=='keine'?`<h4>Nachrichten${o.nachrichten.stimmung?': '+esc(o.nachrichten.stimmung):''}</h4><div>${esc(o.nachrichten.begruendung||'')}</div>`:'')+`<div class="row" style="margin-top:8px;flex-wrap:nowrap"><input class="ai-q" placeholder="Frage zu diesem Asset …"><button data-act="aiq" data-sym="${esc(y)}">Fragen</button></div><div class="ai-a" style="margin-top:6px"></div><div class="mu" style="margin-top:6px">${o._f?'Freier Modus: spekulative KI-Einschätzung mit eigenen Annahmen, keine verlässliche Prognose, kein Anlagerat.':'Strenger Modus: nur auf Basis der berechneten Werte, kein Anlagerat, kann sich irren.'} Die regelbasierte Bewertung oben bleibt unverändert.</div>`;
+  box.innerHTML=`<b>KI-Einordnung</b> <span class="mu">Konfidenz: ${esc(o.konfidenz||'–')}${o._f?' · Freier Modus':''}${t?' · Stand '+hhmm(t):''}</span><p>${esc(o.einordnung||'')}</p>`+aiLi('Widersprüche',o.widersprueche)+aiLi('Ungültig, wenn',o.ungueltig_wenn)+(o.ausblick&&typeof o.ausblick==='object'?`<h4>Ausblick (Szenarien, spekulativ)</h4><div>${esc(o.ausblick.ende_2026||'')}</div><div style="margin-top:4px">${esc(o.ausblick.ende_2027||'')}</div>`:'')+(o.nachrichten&&o.nachrichten.begruendung&&o.nachrichten.stimmung!=='keine'?`<h4>Nachrichten${o.nachrichten.stimmung?': '+esc(o.nachrichten.stimmung):''}</h4><div>${esc(o.nachrichten.begruendung||'')}</div>`:'')+`<div class="row" style="margin-top:8px;flex-wrap:nowrap"><input class="ai-q" placeholder="Frage zu diesem Asset …"><button data-act="aiq" data-sym="${esc(y)}">Fragen</button></div><div class="ai-a" style="margin-top:6px"></div><div class="mu" style="margin-top:6px">${o._f?'Freier Modus: spekulative KI-Einschätzung mit eigenen Annahmen, keine verlässliche Prognose, kein Anlagerat.':'Strenger Modus: nur auf Basis der berechneten Werte, kein Anlagerat, kann sich irren.'} Die regelbasierte Bewertung oben bleibt unverändert.</div>`;
 }
 async function aiAsset(y){
   const box=document.querySelector(`.ai[data-sym="${CSS.escape(y)}"]`),c=AIC[y];if(!box||!c)return;
   box.style.display='';box.innerHTML='<span class="mu">KI analysiert …</span>';
-  try{const fr=AIFREE,t=await aiCall(fr?AIS_FREE:AIS,[{role:'user',content:JSON.stringify(aiData(y),RND)}]),a=t.indexOf('{'),z=t.lastIndexOf('}');if(a<0||z<a)throw new Error('Keine gültige KI-Antwort, bitte nochmal tippen. Erhalten: '+(t.slice(0,80)||'leer'));const o=JSON.parse(t.slice(a,z+1));o._f=fr?1:0;LS.set(aiKey(y),{t:Date.now(),o});aiShow(box,o,Date.now())}
+  try{const fr=AIFREE,t=await aiCall(fr?AIS_FREE:AIS,[{role:'user',content:JSON.stringify(aiData(y))}]),a=t.indexOf('{'),z=t.lastIndexOf('}');if(a<0||z<a)throw new Error('Keine gültige KI-Antwort, bitte nochmal tippen. Erhalten: '+(t.slice(0,80)||'leer'));const o=JSON.parse(t.slice(a,z+1));o._f=fr?1:0;LS.set(aiKey(y),{t:Date.now(),o});aiShow(box,o,Date.now())}
   catch(e){box.innerHTML=`<span class="err">KI-Fehler: ${esc(e.message)}</span>`}
 }
 async function aiAsk(y){
   const box=document.querySelector(`.ai[data-sym="${CSS.escape(y)}"]`),inp=box&&box.querySelector('.ai-q'),out=box&&box.querySelector('.ai-a'),q=inp&&inp.value.trim();if(!q)return;
   out.innerHTML='<span class="mu">…</span>';
-  try{const t=await aiCall(AIFREE?AIQ_FREE:AIQ,[{role:'user',content:'Daten: '+JSON.stringify(aiData(y),RND)+'\nBisherige KI-Einordnung: '+JSON.stringify(AIO[y]||{})+'\n\nFrage: '+q}]);out.innerHTML=`<b>Antwort:</b> ${esc(t).replace(/\n/g,'<br>')}`}
+  try{const t=await aiCall(AIFREE?AIQ_FREE:AIQ,[{role:'user',content:'Daten: '+JSON.stringify(aiData(y))+'\nBisherige KI-Einordnung: '+JSON.stringify(AIO[y]||{})+'\n\nFrage: '+q}]);out.innerHTML=`<b>Antwort:</b> ${esc(t).replace(/\n/g,'<br>')}`}
   catch(e){out.innerHTML=`<span class="err">KI-Fehler: ${esc(e.message)}</span>`}
 }
 async function aiMacro(){
